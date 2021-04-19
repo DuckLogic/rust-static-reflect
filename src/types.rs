@@ -108,10 +108,12 @@ impl Default for FloatSize {
     }
 }
 
-/// A type known to the DuckASM compiler
+/// A type whose representation is known via reflection
 ///
-/// These can either be defined statically (via [AsmRepr]) or
-/// defined at runtime
+/// These are usually defined statically via [StaticReflect
+///
+/// However, they can be allocated at runtime,
+/// and potentially live for a more limited lifetime.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum TypeInfo<'a> {
     /// The zero-length unit type `()`
@@ -199,6 +201,19 @@ unsafe_gc_impl! {
     NEEDS_TRACE => false,
     NEEDS_DROP => ::std::mem::needs_drop::<Self>(),
     visit => |self, visitor| { Ok(()) /* nop */ }
+}
+impl TypeInfo<'static> {
+    /// An integer with the specified size and signed-ness
+    ///
+    /// Panics if the size is invalid
+    #[inline]
+    pub const fn integer(size: usize, signed: bool) -> Self {
+        let size = match IntSize::from_bytes(size) {
+            Ok(s) => s,
+            Err(_) => panic!("Invalid size")
+        };
+        TypeInfo::Integer { size, signed }
+    }
 }
 impl<'tp> TypeInfo<'tp> {
     /// The size of the type, in bytes

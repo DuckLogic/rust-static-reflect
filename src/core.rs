@@ -1,10 +1,10 @@
 use crate::StaticReflect;
-use crate::types::{TypeInfo, IntSize};
+use crate::types::{TypeInfo};
 
 macro_rules! impl_primitive {
     ($target:ty => $info:expr) => {
         unsafe impl StaticReflect for $target {
-            const TYPE_INFO: &'static TypeInfo<'static> = &$info;
+            const TYPE_INFO: TypeInfo<'static> = $info;
         }
     }
 }
@@ -12,15 +12,10 @@ macro_rules! impl_ints {
     ($($target:ty),*) => {
         $(unsafe impl StaticReflect for $target {
             #[allow(unused_comparisons)]
-            const TYPE_INFO: &'static TypeInfo<'static> = &TypeInfo::Integer {
-                size: {
-                    let size = std::mem::size_of::<$target>();
-                    match IntSize::from_bytes(size) {
-                        Ok(s) => s,
-                        Err(_) => panic!("Invalid size")
-                    }
-                },
-                signed: <$target>::MIN < 0,
+            const TYPE_INFO: TypeInfo<'static> = {
+                let size = std::mem::size_of::<$target>();
+                let signed = <$target>::MIN < 0;
+                TypeInfo::integer(size, signed)
             };
         })*
     }
@@ -32,8 +27,8 @@ impl_ints!(u8, u16, u32, u64, i8, i16, i32, i64, usize, isize);
 impl_primitive!(str => TypeInfo::Str);
 impl_primitive!(() => TypeInfo::Unit);
 unsafe impl <T: StaticReflect> StaticReflect for *mut T {
-    const TYPE_INFO: &'static TypeInfo<'static> = &TypeInfo::Pointer;
+    const TYPE_INFO: TypeInfo<'static> = TypeInfo::Pointer;
 }
 unsafe impl <T: StaticReflect> StaticReflect for *const T {
-    const TYPE_INFO: &'static TypeInfo<'static> = &TypeInfo::Pointer;
+    const TYPE_INFO: TypeInfo<'static> = TypeInfo::Pointer;
 }

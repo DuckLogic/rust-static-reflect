@@ -47,7 +47,7 @@ use crate::types::TypeInfo;
 /// form of FFI safety.
 pub unsafe trait StaticReflect {
     /// The static information about the type's representation
-    const TYPE_INFO: &'static TypeInfo<'static>;
+    const TYPE_INFO: TypeInfo<'static>;
 }
 
 /// A type that supports accessing its fields via reflection.
