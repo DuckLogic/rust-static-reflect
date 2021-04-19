@@ -1,2 +1,7 @@
+# Cargo
 /target
 Cargo.lock
+
+# IntelliJ
+.idea
+*.iml

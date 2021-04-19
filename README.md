@@ -1,4 +1,4 @@
-static-reflect-rust
+rust-static-reflect
 ====================
 Compile-time reflection in rust!
 
