@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2018"
 description = "Static type information, giving a form of compile-time reflection"
 license = "MIT"
+repository = "https://github.com/DuckLogic/rust-static-reflect"
+readme = "README.md"
 
 [dependencies]
 # Optional: Support for zerogc

@@ -1,9 +1,11 @@
 [package]
 name = "static-reflect-derive"
-description = "Automatic derive for static-reflect"
+description = "Procedural derive for static-reflect"
 version = "0.1.0"
 edition = "2018"
 license = "MIT"
+repository = "https://github.com/DuckLogic/rust-static-reflect"
+
 
 [lib]
 proc-macro = true
