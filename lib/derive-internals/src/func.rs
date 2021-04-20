@@ -228,14 +228,14 @@ fn emit_def_from_signature(
             FnArg::Typed(ref item) => {
                 let ty = &item.ty;
                 static_arg_types.push(quote!(#ty));
-                argument_types.push(quote!(<#ty as duckasm_repr::AsmRepr>::STATIC_TYPE))
+                argument_types.push(quote!(<#ty as static_reflect::StaticReflect>::TYPE_INFO))
             },
         }
     }
     let return_type = match item.output {
-        ReturnType::Default => quote!(&duckasm_repr::types::AsmType::Unit),
+        ReturnType::Default => quote!(&static_reflect::types::TypeInfo::Unit),
         ReturnType::Type(_, ref ty) => {
-            quote!(&<#ty as duckasm_repr::AsmRepr>::STATIC_TYPE)
+            quote!(&<#ty as static_reflect::StaticReflect>::TYPE_INFO)
         },
     };
     let signature = StaticSignatureDef { argument_types, return_type };
@@ -285,8 +285,9 @@ impl StaticFunctionDef {
         quote! {
             #[doc(hidden)]
             #[allow(non_snake_case)]
-            pub const #const_name: duckasm_repr::funcs::FunctionDeclaration<#return_type, #arg_types> = {
-                #(<#verify_types as duckasm_repr::NativeRepr>::_VERIFY_TRANSPARENT_REPR;)*
+            pub const #const_name: static_reflect::funcs::FunctionDeclaration<#return_type, #arg_types> = {
+                // Verify all the types implement [StaticReflect]
+                #(let _ = <#verify_types as static_reflect::StaticReflect>::TYPE_INFO;)*
                 #def
             };
         }
@@ -317,7 +318,7 @@ impl ToTokens for StaticFunctionDef {
             ref static_return_type,
             static_arg_types: ref staitc_arg_types
         } = *self;
-        tokens.append_all(quote!(duckasm_repr::funcs::FunctionDeclaration::<'static, #static_return_type, #staitc_arg_types> {
+        tokens.append_all(quote!(static_reflect::funcs::FunctionDeclaration::<'static, #static_return_type, #staitc_arg_types> {
             name: #name,
             is_unsafe: #is_unsafe,
             signature: #signature,
@@ -332,13 +333,13 @@ impl ToTokens for FunctionLocation {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         tokens.append_all(match *self {
             FunctionLocation::DynamicallyLinked { link_name: None } => {
-                quote!(duckasm_repr::funcs::FunctionLocation::DynamicallyLinked { link_name: None })
+                quote!(Some(static_reflect::funcs::FunctionLocation::DynamicallyLinked { link_name: None }))
             },
             FunctionLocation::DynamicallyLinked { link_name: Some(ref name) } => {
-                quote!(duckasm_repr::funcs::FunctionLocation::DynamicallyLinked { link_name: Some(#name) })
+                quote!(Some(static_reflect::funcs::FunctionLocation::DynamicallyLinked { link_name: Some(#name) }))
             },
             FunctionLocation::AbsoluteAddress(ref value) => {
-                quote!(duckasm_repr::funcs::FunctionLocation::AbsoluteAddress(#value))
+                quote!(Some(static_reflect::funcs::FunctionLocation::AbsoluteAddress(#value)))
             },
         });
     }
@@ -350,11 +351,11 @@ impl ToTokens for StaticSignatureDef {
             ref argument_types,
             ref return_type
         } = *self;
-        tokens.append_all(quote!(duckasm_repr::funcs::SignatureDef {
+        tokens.append_all(quote!(static_reflect::funcs::SignatureDef {
             argument_types: &[#(#argument_types),*],
             return_type: #return_type,
             // We use C FFI
-            calling_convention: duckasm_repr::funcs::CallingConvention::StandardC
+            calling_convention: static_reflect::funcs::CallingConvention::StandardC
         }))
     }
 }

@@ -19,6 +19,7 @@
 #[cfg(feature = "builtins")]
 pub mod builtins;
 pub mod types;
+pub mod funcs;
 
 mod core;
 
