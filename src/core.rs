@@ -1,3 +1,4 @@
+//! Implementations of [StaticReflect] for core types (for `#![no_std]`)
 use crate::StaticReflect;
 use crate::types::{TypeInfo};
 
@@ -26,9 +27,25 @@ impl_ints!(u8, u16, u32, u64, i8, i16, i32, i64, usize, isize);
 #[cfg(feature = "builtins")]
 impl_primitive!(str => TypeInfo::Str);
 impl_primitive!(() => TypeInfo::Unit);
-unsafe impl <T: StaticReflect> StaticReflect for *mut T {
+impl_primitive!(bool => TypeInfo::Bool);
+impl_primitive!(f32 => TypeInfo::F32);
+impl_primitive!(f64 => TypeInfo::F64);
+
+/// A pointer
+///
+/// NOTE: The pointed-to value can be anything,
+/// even if it doesn't implement [StaticReflect].
+///
+/// This is fine since the static reflection system
+/// doesn't maintain
+/// information about pointers (to avoid cycles).
+unsafe impl <T> StaticReflect for *mut T {
     const TYPE_INFO: TypeInfo<'static> = TypeInfo::Pointer;
 }
-unsafe impl <T: StaticReflect> StaticReflect for *const T {
+/// An immutable pointer
+///
+/// The static reflection system makes no distinction between
+/// mutable and immutable pointers.
+unsafe impl <T> StaticReflect for *const T {
     const TYPE_INFO: TypeInfo<'static> = TypeInfo::Pointer;
 }

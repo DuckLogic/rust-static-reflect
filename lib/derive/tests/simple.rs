@@ -3,14 +3,14 @@
     // const_fn is used by AsmType
     const_fn, const_panic
 )]
-use duckasm_repr::field_offset;
-use duckasm_repr::{AsmRepr, AsmFieldInfo};
-use duckasm_repr::types::{AsmType, FieldDef, StructureDef, UnionDef, UnionFieldDef, TypeId};
+
+use static_reflect::{field_offset, StaticReflect, FieldReflect};
+use static_reflect::types::{TypeInfo, FieldDef, StructureDef, UnionDef, UnionFieldDef, TypeId};
 use std::mem::{size_of, align_of};
 
-use duckasm_derive::{AsmRepr};
+use static_reflect_derive::{StaticReflect};
 
-#[derive(Copy, Clone, Debug, PartialEq, AsmRepr)]
+#[derive(Copy, Clone, Debug, PartialEq, StaticReflect)]
 #[repr(C)]
 pub struct Nested {
     cycle: *mut SimpleStruct,
@@ -18,7 +18,7 @@ pub struct Nested {
     number: u64,
 }
 
-#[derive(AsmRepr)]
+#[derive(StaticReflect)]
 #[repr(C)]
 pub struct SimpleStruct {
     // We can have pointers to anything
@@ -38,7 +38,7 @@ fn leak_vec<T>(elements: Vec<T>) -> &'static [T] {
 }
 
 #[repr(C)]
-#[derive(AsmRepr)]
+#[derive(StaticReflect)]
 union SimpleUnion {
     pub text: *mut String,
     b: bool,
@@ -48,34 +48,34 @@ union SimpleUnion {
 
 #[test]
 fn test_union_types() {
-    const EXPECTED_UNION: AsmType<'static> = AsmType::Union(&UnionDef {
+    const EXPECTED_UNION: TypeInfo<'static> = TypeInfo::Union(&UnionDef {
         name: "SimpleUnion",
         fields: &[
-            SimpleUnion::FIELD_INFO.text.erase(),
-            SimpleUnion::FIELD_INFO.b.erase(),
-            SimpleUnion::FIELD_INFO.f.erase(),
-            SimpleUnion::FIELD_INFO.nested.erase(),
+            SimpleUnion::NAMED_FIELD_INFO.text.erase(),
+            SimpleUnion::NAMED_FIELD_INFO.b.erase(),
+            SimpleUnion::NAMED_FIELD_INFO.f.erase(),
+            SimpleUnion::NAMED_FIELD_INFO.nested.erase(),
         ],
         size: size_of::<SimpleUnion>(),
         alignment: align_of::<SimpleUnion>()
     });
-    assert_eq!(EXPECTED_UNION, SimpleUnion::STATIC_TYPE);
-    assert_eq!(SimpleUnion::FIELD_INFO.text, UnionFieldDef {
+    assert_eq!(EXPECTED_UNION, SimpleUnion::TYPE_INFO);
+    assert_eq!(SimpleUnion::NAMED_FIELD_INFO.text, UnionFieldDef {
         name: "text",
         value_type: TypeId::<*mut String>::get(),
         index: 0
     });
-    assert_eq!(SimpleUnion::FIELD_INFO.b, UnionFieldDef {
+    assert_eq!(SimpleUnion::NAMED_FIELD_INFO.b, UnionFieldDef {
         name: "b",
         value_type: TypeId::<bool>::get(),
         index: 1
     });
-    assert_eq!(SimpleUnion::FIELD_INFO.f, UnionFieldDef {
+    assert_eq!(SimpleUnion::NAMED_FIELD_INFO.f, UnionFieldDef {
         name: "f",
         value_type: TypeId::<f32>::get(),
         index: 2
     });
-    assert_eq!(SimpleUnion::FIELD_INFO.nested, UnionFieldDef {
+    assert_eq!(SimpleUnion::NAMED_FIELD_INFO.nested, UnionFieldDef {
         name: "nested",
         value_type: TypeId::<Nested>::get(),
         index: 3
@@ -84,30 +84,30 @@ fn test_union_types() {
 
 #[test]
 fn test_struct_types() {
-    const NESTED_TYPE: AsmType<'static> = AsmType::Structure(&StructureDef {
+    const NESTED_TYPE: TypeInfo<'static> = TypeInfo::Structure(&StructureDef {
         name: "Nested",
         fields: &[
-            Nested::FIELD_INFO.cycle.erase(),
-            Nested::FIELD_INFO.float.erase(),
-            Nested::FIELD_INFO.number.erase(),
+            Nested::NAMED_FIELD_INFO.cycle.erase(),
+            Nested::NAMED_FIELD_INFO.float.erase(),
+            Nested::NAMED_FIELD_INFO.number.erase(),
         ],
         size: size_of::<Nested>(),
         alignment: align_of::<Nested>()
     });
-    assert_eq!(Nested::STATIC_TYPE, NESTED_TYPE);
-    assert_eq!(Nested::FIELD_INFO.cycle, FieldDef {
+    assert_eq!(Nested::TYPE_INFO, NESTED_TYPE);
+    assert_eq!(Nested::NAMED_FIELD_INFO.cycle, FieldDef {
         name: "cycle",
         value_type: TypeId::<*mut SimpleStruct>::get(),
         offset: field_offset!(Nested, cycle),
         index: 0
     });
-    assert_eq!(Nested::FIELD_INFO.float, FieldDef {
+    assert_eq!(Nested::NAMED_FIELD_INFO.float, FieldDef {
         name: "float",
         value_type: TypeId::<f64>::get(),
         offset: field_offset!(Nested, float),
         index: 1
     });
-    assert_eq!(Nested::FIELD_INFO.number, FieldDef {
+    assert_eq!(Nested::NAMED_FIELD_INFO.number, FieldDef {
         name: "number",
         value_type: TypeId::<u64>::get(),
         offset: field_offset!(Nested, number),
@@ -154,8 +154,8 @@ fn test_struct_types() {
     ];
     let static_fields = leak_vec(fields);
     assert_eq!(
-        SimpleStruct::STATIC_TYPE,
-        AsmType::Structure(&StructureDef {
+        SimpleStruct::TYPE_INFO,
+        TypeInfo::Structure(&StructureDef {
             name: "SimpleStruct",
             fields: static_fields,
             size: size_of::<SimpleStruct>(),
@@ -164,34 +164,34 @@ fn test_struct_types() {
     );
 }
 
-#[derive(AsmRepr)]
+#[derive(StaticReflect)]
 #[repr(C)]
 struct OpaqueArray {
-    #[duckasm(assume_repr = "i8")]
+    #[reflect(assume_repr = "i8")]
     first: u8,
-    #[duckasm(opaque_array)]
+    #[static_reflect(opaque_array)]
     array: [*mut String; 42]
 }
 
 #[test]
 fn test_options() {
-    const OPAQUE_ARRAY_TYPE: AsmType<'static> = AsmType::Structure(&StructureDef {
+    const OPAQUE_ARRAY_TYPE: TypeInfo<'static> = TypeInfo::Structure(&StructureDef {
         name: "OpaqueArray",
         fields: &[
-            OpaqueArray::FIELD_INFO.first.erase(),
-            OpaqueArray::FIELD_INFO.array.erase(),
+            OpaqueArray::NAMED_FIELD_INFO.first.erase(),
+            OpaqueArray::NAMED_FIELD_INFO.array.erase(),
         ],
         size: size_of::<OpaqueArray>(),
         alignment: align_of::<OpaqueArray>()
     });
-    assert_eq!(OPAQUE_ARRAY_TYPE, OpaqueArray::STATIC_TYPE);
-    assert_eq!(OpaqueArray::FIELD_INFO.first, FieldDef {
+    assert_eq!(OPAQUE_ARRAY_TYPE, OpaqueArray::TYPE_INFO);
+    assert_eq!(OpaqueArray::NAMED_FIELD_INFO.first, FieldDef {
         name: "first",
         value_type: TypeId::<i8>::get(), // It's actually a 'u8', but we assume_repr
         offset: field_offset!(OpaqueArray, first),
         index: 0
     });
-    assert_eq!(OpaqueArray::FIELD_INFO.array, FieldDef {
+    assert_eq!(OpaqueArray::NAMED_FIELD_INFO.array, FieldDef {
         name: "array",
         value_type: TypeId::<*mut String>::get(),
         offset: field_offset!(OpaqueArray, array),

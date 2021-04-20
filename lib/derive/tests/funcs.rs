@@ -2,7 +2,7 @@
 use std::os::raw::c_void;
 
 use duckasm_derive::duckasm_func;
-use duckasm_repr::AsmRepr;
+use static_repr::AsmRepr;
 use duckasm_repr::funcs::{FunctionDeclaration, FunctionLocation, SignatureDef};
 use duckasm_repr::types::AsmType;
 use std::marker::PhantomData;

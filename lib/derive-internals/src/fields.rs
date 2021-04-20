@@ -93,62 +93,61 @@ impl Parse for DeriveFieldOptions {
     }
 }
 
-pub fn derive_static_reflect(input: &DeriveInput) -> TokenStream {
+pub fn derive_static_reflect(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
     let name = &input.ident;
     if !has_repr_c(&input) {
-        return syn::Error::new(
-            Span::call_site(),
+        return Err(syn::Error::new(
+            name.span(),
             "StaticReflect requires repr(C)"
-        ).to_compile_error().into()
+        ))
     }
 
     let generics = add_type_bounds(&input.generics, &[parse_quote!(::reflect::StaticReflect)]);
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-    let mut verify_fields = Vec::new();
     let mut extra_defs = Vec::new();
     let static_type = match input.data {
         Data::Struct(ref data) => {
             handle_type(
                 StructHandler::new(data, name),
-                &mut verify_fields, &name,
+                &name,
                 quote!(#impl_generics),
                 quote!(#ty_generics),
                 quote!(#where_clause),
                 &mut extra_defs
-            )
+            )?
         },
-        Data::Enum(ref data) => enum_static_type(data, &name),
+        Data::Enum(ref data) => enum_static_type(data, &name)?,
         Data::Union(ref data) => {
             handle_type(
                 UnionTypeHandler { data, name },
-                &mut verify_fields, &name,
+                &name,
                 quote!(#impl_generics),
                 quote!(#ty_generics),
                 quote!(#where_clause),
                 &mut extra_defs
-            )
+            )?
         },
-    }.unwrap_or_else(|e| e.to_compile_error());
+    };
 
     let r = quote! {
         #(#extra_defs)*
-        impl #impl_generics static_reflect::StaticReflect for #name #ty_generics #where_clause {
-            const TYPE_INFO: static_reflect::types::TypeInfo<'static> = #static_type;
-        }
-        // NOTE: We've verified all our fields implement `NativeRepr`
-        unsafe impl #impl_generics static_reflect::NativeRepr for #name #ty_generics #where_clause {
-            const _VERIFY_TRANSPARENT_REPR: u32 = {
-                // Verify all our fields implement `NativeRepr`
-                0 #(+ #verify_fields)*
+        unsafe impl #impl_generics static_reflect::StaticReflect for #name #ty_generics #where_clause {
+            const TYPE_INFO: static_reflect::types::TypeInfo<'static> = {
+                /*
+                 * NOTE: All our fields are assumed to implement `StaticReflect`,
+                 * because there is no other way they could show up
+                 * in the generated `TypeInfo`.
+                 */
+                #static_type
             };
         }
     };
     crate::utils::debug_derive("StaticReflect", &input.ident, &r);
-    r.into()
+    Ok(r)
 }
 fn handle_type<'a, T: TypeHandler<'a>>(
-    mut target: T, verify_fields: &mut Vec<TokenStream>,
+    mut target: T,
     name: &Ident,
     impl_generics: TokenStream,
     ty_generics: TokenStream,
@@ -165,8 +164,6 @@ fn handle_type<'a, T: TypeHandler<'a>>(
         field_associated_types.push(quote!(type #field_name = #field_type;));
         let field_def_type = T::field_def_type(Some(quote!(#field_type)));
         field_defs.push(quote!(pub #field_name: #field_def_type,));
-        // NOTE: Must use size_of<#original_type> (See above)
-        verify_fields.push(field.verify_type());
     })?;
     let field_info_struct_name = Ident::new(
         &format!("_FieldInfo{}", name),
@@ -197,7 +194,7 @@ fn handle_type<'a, T: TypeHandler<'a>>(
         .map(|(name, def)| quote!(#name: #def,))
         .collect::<Vec<TokenStream>>();
     extra_defs.push(quote!(
-        impl #impl_generics static_reflect::FieldReflect for #name #ty_generics #where_clause {
+        unsafe impl #impl_generics static_reflect::FieldReflect for #name #ty_generics #where_clause {
             type NamedFieldInfo = #field_info_struct_name;
             const NAMED_FIELD_INFO: Self::NamedFieldInfo = #field_info_struct_name {
                 #(#field_inits)*
@@ -208,11 +205,11 @@ fn handle_type<'a, T: TypeHandler<'a>>(
     let field_def_type_name = T::field_def_type(None);
     let type_def_type = T::type_def_type();
     let header = quote! {
-        use static_reflect::{AsmRepr, AsmFieldInfo};
-        use static_reflect::types::AsmType;
+        use static_reflect::{StaticReflect, FieldReflect};
+        use static_reflect::types::TypeInfo;
         use #field_def_type_name;
         use #type_def_type;
-        const _FIELDS: &'static [#field_def_type_name<'static>] = &[#(<#name as AsmFieldInfo>::FIELD_INFO.#field_names.erase()),*];
+        const _FIELDS: &'static [#field_def_type_name<'static>] = &[#(<#name as FieldReflect>::NAMED_FIELD_INFO.#field_names.erase()),*];
     };
     let static_def = target.create_static_def(header);
     let into_type = T::def_into_type(quote!(_DEF));
@@ -245,12 +242,6 @@ struct FieldInfo<'a> {
     name: &'a Ident,
     static_type: Type,
     static_def: TokenStream
-}
-impl<'a> FieldInfo<'a> {
-    fn verify_type(&self) -> TokenStream {
-        let field_type = &self.static_type;
-        quote!(<#field_type as ::static_reflect::StaticReflect>::_VERIFY_TRANSPARENT_REPR)
-    }
 }
 struct StructHandler<'a> {
     name: &'a Ident,
@@ -399,7 +390,7 @@ impl<'a> TypeHandler<'a> for UnionTypeHandler<'a> {
     }
 
     fn def_into_type(def_ref: TokenStream) -> TokenStream {
-        quote!(static_reflect::types::AsmType::Union(#def_ref))
+        quote!(static_reflect::types::TypeInfo::Union(#def_ref))
     }
 
     fn handle_fields<F: FnMut(FieldInfo<'a>)>(&mut self, mut handler: F) -> syn::Result<()> {

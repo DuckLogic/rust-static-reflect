@@ -10,8 +10,13 @@ proc-macro = true
 
 [dependencies]
 proc-macro2 = "^1"
+syn = "1"
 
 # Actual implementation
 [dependencies.static-reflect-derive-internals]
 version = "0.1.0"
 path = "../derive-internals"
+
+[dev-dependencies]
+# Testing
+static-reflect = { version = "0.1.0", path = "../.." }

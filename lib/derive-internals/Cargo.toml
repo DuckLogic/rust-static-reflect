@@ -13,7 +13,3 @@ indexmap = "1.6"
 [dependencies.syn]
 version = "1"
 features = ["full", "extra-traits"]
-
-[dev-dependencies]
-# Testing
-static-reflect = { version = "0.1.0", path = "../.." }

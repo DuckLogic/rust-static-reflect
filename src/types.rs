@@ -203,6 +203,11 @@ unsafe_gc_impl! {
     visit => |self, visitor| { Ok(()) /* nop */ }
 }
 impl TypeInfo<'static> {
+    /// A 32-bit, single-precision float
+    pub const F32: Self = TypeInfo::Float { size: FloatSize::Single };
+    /// A 64-bit, double-precision float
+    pub const F64: Self = TypeInfo::Float { size: FloatSize::Double };
+
     /// An integer with the specified size and signed-ness
     ///
     /// Panics if the size is invalid
