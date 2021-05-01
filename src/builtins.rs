@@ -63,6 +63,8 @@ unsafe impl<T: Sync> Send for AsmSlice<T> {}
 /// and this type does not maintain any invariants.
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "zerogc", derive(Trace))]
+#[cfg_attr(feature = "zerogc", zerogc(nop_trace, copy))]
 pub struct AsmStr {
     /// The underlying memory of the string
     pub bytes: AsmSlice<u8>
