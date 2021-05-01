@@ -5,6 +5,9 @@
 use std::mem::MaybeUninit;
 use crate::{StaticReflect, field_offset, TypeInfo};
 
+#[cfg(feature = "zerogc")]
+use zerogc_derive::Trace;
+
 /// A FFi-safe slice type (`&[T]`)
 /// 
 /// Unlike the rust type, this has a well-defined C representation.
@@ -67,6 +70,7 @@ unsafe impl<T: Sync> Send for AsmSlice<T> {}
 #[cfg_attr(feature = "zerogc", zerogc(nop_trace, copy))]
 pub struct AsmStr {
     /// The underlying memory of the string
+    #[cfg_attr(feature = "zerogc", zerogc(unsafe_skip_trace))]
     pub bytes: AsmSlice<u8>
 }
 impl AsmStr {
