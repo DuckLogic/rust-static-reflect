@@ -3,7 +3,7 @@
 //! These are mostly FFI-safe alternatives to the standard library
 //! types.
 use std::mem::MaybeUninit;
-use crate::StaticReflect;
+use crate::{StaticReflect, field_offset, TypeInfo};
 
 /// A FFi-safe slice type (`&[T]`)
 /// 
@@ -37,7 +37,21 @@ impl<T: StaticReflect> Clone for AsmSlice<T> {
     }
 }
 impl<T: StaticReflect> Copy for AsmSlice<T> {}
+impl<'a, T: 'a> From<&'a [T]> for AsmSlice<T> {
+    #[inline]
+    fn from(slice: &'a [T]) -> Self {
+        AsmSlice { ptr: slice.as_ptr() as *mut _, len: slice.len() }
+    }
+}
+unsafe impl<T: StaticReflect> StaticReflect for AsmSlice<T> {
+    const TYPE_INFO: TypeInfo<'static> = TypeInfo::Slice {
+        element_type: &T::TYPE_INFO
+    };
+}
 
+/// Assuming there is no mutation of the underlying memory,
+/// this is safe to send between threads
+unsafe impl<T: Sync> Send for AsmSlice<T> {}
 
 /// A FFI-safe UTF8 string.
 ///
@@ -65,6 +79,14 @@ impl AsmStr {
         self.bytes.len
     }
 }
+unsafe impl StaticReflect for AsmStr {
+    const TYPE_INFO: TypeInfo<'static> = TypeInfo::Str;
+}
+impl<'a> From<&'a str> for AsmStr {
+    fn from(s: &'a str) -> AsmStr {
+        AsmStr { bytes: s.as_bytes().into() }
+    }
+}
 
 /// A FFI-safe alternative to Rust's [std::optional::Option].
 ///
@@ -86,6 +108,23 @@ impl AsmStr {
 pub struct AsmOption<T> {
     present: bool,
     value: MaybeUninit<T>
+}
+impl AsmOption<()> {
+    /// The offset of the 'present' field
+    ///
+    /// This should be zero, regardless of the inner type
+    #[inline]
+    pub const fn present_field_offset() -> usize {
+        assert!(field_offset!(AsmOption::<()>, present) == 0);
+        0
+    }
+    /// The offset of the value field
+    ///
+    /// This should be equal to the type's alignment
+    #[inline]
+    pub const fn value_field_offset(element_type: TypeInfo<'static>) -> usize {
+        element_type.alignment()
+    }
 }
 impl<T> AsmOption<T> {
     /// An option with no value
@@ -123,3 +162,17 @@ impl<T> AsmOption<T> {
         self.present
     }
 }
+impl<T> From<Option<T>> for AsmOption<T> {
+    fn from(o: Option<T>) -> AsmOption<T> {
+        match o {
+            None => AsmOption::none(),
+            Some(v) => AsmOption::some(v)
+        }
+    }
+}
+unsafe impl<T: StaticReflect> StaticReflect for AsmOption<T> {
+    const TYPE_INFO: TypeInfo<'static> = TypeInfo::Optional(&T::TYPE_INFO);
+}
+
+/// This is an owned value, so it's safe to send
+unsafe impl<T: Send> Send for AsmOption<T> {}

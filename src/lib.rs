@@ -13,9 +13,13 @@
 #![feature(
     const_fn, // We rely on const eval :(
     const_panic, const_option, // We use Option::unwrap
+    // Used for field_offset macro
+    const_raw_ptr_deref,
+    const_raw_ptr_to_usize_cast,
 )]
 #![cfg_attr(feature = "never", feature(never_type))]
 
+mod macros;
 #[cfg(feature = "builtins")]
 pub mod builtins;
 pub mod types;
@@ -24,21 +28,6 @@ pub mod funcs;
 mod core;
 
 use crate::types::TypeInfo;
-
-/// Get the integer offset of the specified field
-#[macro_export]
-macro_rules! field_offset {
-    ($target:path, $($field:ident),+) => {
-        unsafe {
-            /*
-             * I'm going to assume the dereference is safe,
-             * because of the presense of '(*uninit.as_mut_ptr()).field'
-             * in the documentation for std::ptr::addr_of_mut
-             */
-            (std::ptr::addr_of!((*(1 as *mut $target))$(.$field)*) as usize) - 1
-        }
-    }
-}
 
 /// The trait for types whose information can be accessed via static reflection.
 ///

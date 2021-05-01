@@ -1,6 +1,8 @@
 //! Implementations of [StaticReflect] for core types (for `#![no_std]`)
 use crate::StaticReflect;
 use crate::types::{TypeInfo};
+use std::mem::{self, ManuallyDrop};
+use core::ptr::NonNull;
 
 macro_rules! impl_primitive {
     ($target:ty => $info:expr) => {
@@ -31,6 +33,18 @@ impl_primitive!(bool => TypeInfo::Bool);
 impl_primitive!(f32 => TypeInfo::F32);
 impl_primitive!(f64 => TypeInfo::F64);
 
+// Builtin support for the never type
+impl_primitive!(! => TypeInfo::Never);
+
+
+/// Support [StaticReflect] for [ManuallyDrop] by just representing the inner type
+unsafe impl<T: StaticReflect> StaticReflect for ManuallyDrop<T> {
+    const TYPE_INFO: TypeInfo<'static> = {
+        assert!(mem::size_of::<Self>() == mem::size_of::<T>());
+        T::TYPE_INFO
+    };
+}
+
 /// A pointer
 ///
 /// NOTE: The pointed-to value can be anything,
@@ -47,5 +61,20 @@ unsafe impl <T> StaticReflect for *mut T {
 /// The static reflection system makes no distinction between
 /// mutable and immutable pointers.
 unsafe impl <T> StaticReflect for *const T {
+    const TYPE_INFO: TypeInfo<'static> = TypeInfo::Pointer;
+}
+
+/// A non-zero pointer type, where optional types
+/// are guaranteed to use the nullable representation
+///
+/// If `T: SimpleNonZeroPointer` -> `sizeof(Option<T>) == sizeof(T) && repr(Option<T>) == repr(T)`
+pub unsafe trait SimpleNonZeroPointer: StaticReflect {}
+
+unsafe impl <T> SimpleNonZeroPointer for NonNull<T> {}
+unsafe impl <T> StaticReflect for NonNull<T> {
+    const TYPE_INFO: TypeInfo<'static> = TypeInfo::Pointer;
+}
+
+unsafe impl <T: SimpleNonZeroPointer> StaticReflect for Option<T> {
     const TYPE_INFO: TypeInfo<'static> = TypeInfo::Pointer;
 }
