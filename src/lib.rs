@@ -13,6 +13,7 @@
 #![feature(
     const_fn, // We rely on const eval :(
     const_panic, const_option, // We use Option::unwrap
+    const_fn_fn_ptr_basics, // We use PhantomData<fn() -> T>
     // Used for field_offset macro
     const_raw_ptr_deref,
     const_raw_ptr_to_usize_cast,

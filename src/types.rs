@@ -525,7 +525,7 @@ impl<T: StaticReflect> Clone for TypeId<'_, T> {
 #[derive(Eq, PartialEq, Hash)]
 pub struct TypeId<'a, T: StaticReflect = ()> {
     value: &'a TypeInfo<'a>,
-    marker: PhantomData<*mut T>
+    marker: PhantomData<fn() -> T>
 }
 /*
   * TODO: Fix to use derive

@@ -21,9 +21,9 @@ pub struct FunctionDeclaration<'a, R = (), Args = ()> {
     /// Unlike the [PhantomData], this is actually retained at runtime.
     pub signature: SignatureDef<'a>,
     /// PhantomData: The return type of the function 
-    pub return_type: PhantomData<*mut R>,
+    pub return_type: PhantomData<fn() -> R>,
     /// PhantomData: The argument types of the function
-    pub arg_types: PhantomData<*mut Args>,
+    pub arg_types: PhantomData<fn(Args) -> ()>,
 }
 impl<'a, R, Args> FunctionDeclaration<'a, R, Args> {
     /// If the function has a known location at runtime
