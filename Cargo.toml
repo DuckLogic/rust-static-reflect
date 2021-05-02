@@ -1,6 +1,6 @@
 [package]
 name = "static-reflect"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2018"
 description = "Static type information, giving a form of compile-time reflection"
 license = "MIT"
