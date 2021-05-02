@@ -1,6 +1,6 @@
 //! Implementations of [StaticReflect] for core types (for `#![no_std]`)
 use crate::StaticReflect;
-use crate::types::{TypeInfo};
+use crate::types::{TypeInfo, SimpleNonZeroPointer};
 use std::mem::{self, ManuallyDrop};
 use core::ptr::NonNull;
 
@@ -63,12 +63,6 @@ unsafe impl <T> StaticReflect for *mut T {
 unsafe impl <T> StaticReflect for *const T {
     const TYPE_INFO: TypeInfo<'static> = TypeInfo::Pointer;
 }
-
-/// A non-zero pointer type, where optional types
-/// are guaranteed to use the nullable representation
-///
-/// If `T: SimpleNonZeroPointer` -> `sizeof(Option<T>) == sizeof(T) && repr(Option<T>) == repr(T)`
-pub unsafe trait SimpleNonZeroPointer: StaticReflect {}
 
 unsafe impl <T> SimpleNonZeroPointer for NonNull<T> {}
 unsafe impl <T> StaticReflect for NonNull<T> {
