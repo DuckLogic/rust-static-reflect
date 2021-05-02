@@ -21,6 +21,9 @@ never = []
 # Support the 'builtin' alternative to stdlib types
 builtins = []
 
-
 [workspace]
 members = ["lib/*"]
+
+# Workaround for outdated nightly
+[package.metadata.docs.rs]
+rustc-args = ["--cfg", "docs_rs"]
