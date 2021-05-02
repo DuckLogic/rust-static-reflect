@@ -24,7 +24,7 @@
  * However it breaks on the version that docs.rs is using (as of this writing).
  * Therefore, we have to turn it off there.
  */
-#![cfg_attr(not(docs_rs), feature(const_fn_trait_bound))]
+#![cfg_attr(not(feature="docs-rs"), feature(const_fn_trait_bound))]
 #![cfg_attr(feature = "never", feature(never_type))]
 
 mod macros;

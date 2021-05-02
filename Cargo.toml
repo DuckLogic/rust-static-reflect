@@ -1,6 +1,6 @@
 [package]
 name = "static-reflect"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2018"
 description = "Static type information, giving a form of compile-time reflection"
 license = "MIT"
@@ -21,9 +21,14 @@ never = []
 # Support the 'builtin' alternative to stdlib types
 builtins = []
 
+# Workaround for outdated nightly
+docs-rs = []
+
+
 [workspace]
 members = ["lib/*"]
 
 # Workaround for outdated nightly
 [package.metadata.docs.rs]
-rustc-args = ["--cfg", "docs_rs"]
+features = ["docs-rs"]
+
