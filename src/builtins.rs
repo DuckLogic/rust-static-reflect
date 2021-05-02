@@ -128,7 +128,7 @@ impl AsmOption<()> {
     ///
     /// This should be equal to the type's alignment
     #[inline]
-    pub const fn value_field_offset(element_type: TypeInfo<'static>) -> usize {
+    pub const fn value_field_offset(element_type: &TypeInfo<'_>) -> usize {
         element_type.alignment()
     }
 }
