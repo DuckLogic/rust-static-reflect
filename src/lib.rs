@@ -35,7 +35,7 @@ pub mod funcs;
 
 mod core;
 
-use crate::types::TypeInfo;
+pub use crate::types::TypeInfo;
 
 /// The trait for types whose information can be accessed via static reflection.
 ///
