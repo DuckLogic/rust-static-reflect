@@ -177,6 +177,25 @@ pub enum TypeInfo<'a> {
     Structure(&'a StructureDef<'a>),
     /// An untagged union
     Union(&'a UnionDef<'a>),
+    /// A named, transparent, extern type
+    Extern {
+        /// The name of the type
+        ///
+        /// Since this is all we have, it's what used
+        /// to disambiguate between them.
+        name: &'static str
+    },
+    /// A 'magic' type, with a user-defined meaning
+    ///
+    /// This allows extensions to the type system
+    Magic {
+        /// The id of the magic type,
+        /// giving more information about how its implemented
+        /// and what it actually means.
+        id: &'static &'static str,
+        /// Extra information (if any)
+        extra: Option<&'a TypeInfo<'a>>,
+    }
 }
 /*
  * HACK: Implement AsmType as `NullTrace`
@@ -240,7 +259,9 @@ impl<'tp> TypeInfo<'tp> {
             #[cfg(feature = "builtins")]
             Str => size_of::<AsmStr>(),
             Structure(ref def) => def.size,
-            Union(ref def) => def.size
+            Union(ref def) => def.size,
+            // Provide a dummy value
+            TypeInfo::Magic { .. } | TypeInfo::Extern { .. } => 0xFFFF_FFFF
         }
     }
     /// The alignment of the type, matching `std::mem::align_of`
@@ -250,6 +271,7 @@ impl<'tp> TypeInfo<'tp> {
             TypeInfo::Unit => align_of::<()>(),
             #[cfg(feature = "never")]
             TypeInfo::Never => align_of::<!>(),
+            TypeInfo::Magic { .. } | TypeInfo::Extern { .. } => 0,
             TypeInfo::Bool => align_of::<bool>(),
             TypeInfo::Integer { size: IntSize::Byte, signed: false } => align_of::<u8>(),
             TypeInfo::Integer { size: IntSize::Short, signed: false } => align_of::<u16>(),
@@ -286,6 +308,9 @@ impl<'a> Display for TypeInfo<'a> {
             TypeInfo::Pointer => f.write_str("*mut void"),
             TypeInfo::Structure(ref def) => f.write_str(def.name),
             TypeInfo::Union(ref def) => f.write_str(def.name),
+            TypeInfo::Extern { name } => write!(f, "extern {}", name),
+            TypeInfo::Magic { id, extra: None } => write!(f, "magic::{}", id),
+            TypeInfo::Magic { id, extra: Some(extra) } => write!(f, "magic::{}<{}>", id, extra)
         }
     }
 }
