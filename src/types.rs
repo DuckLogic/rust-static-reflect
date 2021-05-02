@@ -160,7 +160,7 @@ pub enum TypeInfo<'a> {
     /// Internally represented by the [AsmStr] structure
     #[cfg(feature = "builtins")]
     Str,
-    /// A very simple optional, represented as [AsmOption]
+    /// A very simple optional, represented as an [AsmOption](crate::builtins::AsmOption)
     ///
     /// This **never** uses the null pointer optimization
     #[cfg(feature = "builtins")]
@@ -454,7 +454,7 @@ impl PrimitiveType {
         use self::PrimitiveType::*;
         use self::IntSize::*;
         use self::FloatSize::*;
-        let static_type = match *self {
+        match *self {
             Unit => &TypeInfo::Unit,
             Never => &TypeInfo::Never,
             Bool => &TypeInfo::Bool,
@@ -469,8 +469,7 @@ impl PrimitiveType {
             Integer { size: Long, signed: false } => &TypeInfo::Integer { size: Long, signed: false },
             Float { size: Single } => &TypeInfo::Float { size: Single },
             Float { size: Double } => &TypeInfo::Float { size: Double },
-        };
-        static_type
+        }
     }
 
     /// The number of bytes this type tales up

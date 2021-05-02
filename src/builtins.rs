@@ -84,6 +84,11 @@ impl AsmStr {
     pub fn len(&self) -> usize {
         self.bytes.len
     }
+    /// Check if the string is empty
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.bytes.len == 0
+    }
 }
 unsafe impl StaticReflect for AsmStr {
     const TYPE_INFO: TypeInfo<'static> = TypeInfo::Str;
@@ -94,7 +99,7 @@ impl<'a> From<&'a str> for AsmStr {
     }
 }
 
-/// A FFI-safe alternative to Rust's [std::optional::Option].
+/// A FFI-safe alternative to Rust's [std::option::Option].
 ///
 /// Unlike the Rust type, this does not use the null-pointer
 /// optimization.
@@ -141,7 +146,7 @@ impl<T> AsmOption<T> {
             value: MaybeUninit::uninit()
         }
     }
-    /// An option with a value
+    /// Create an option with a value
     #[inline]
     pub fn some(value: T) -> AsmOption<T> {
         AsmOption {
@@ -151,9 +156,12 @@ impl<T> AsmOption<T> {
     }
     /// Assume that this option is valid
     ///
-    /// Technically, it should already be invalid
-    /// to have undefined internals.
-    /// However, this is still unsafe as a sort of lint.
+    /// This type is often used to ferry things across FFI boundaries,
+    /// so it's the callers repsonsibility to be safe with it.
+    ///
+    /// ## Safety
+    /// The caller assumes that the underlying memory is valid.
+    /// If not, undefined behavior will result.
     #[inline]
     pub unsafe fn assume_valid(self) -> Option<T> {
         if self.present {
