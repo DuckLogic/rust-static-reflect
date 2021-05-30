@@ -11,7 +11,6 @@
 //! of compile-time reflection.
 #![deny(missing_docs)]
 #![feature(
-    const_fn, // We rely on const eval :(
     const_panic, const_option, // We use Option::unwrap
     const_fn_fn_ptr_basics, // We use PhantomData<fn() -> T>
     // Used for field_offset macro

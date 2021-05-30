@@ -1,7 +1,7 @@
 #![feature(
     never_type,
-    // const_fn is used by AsmType
-    const_fn, const_panic
+    // RFC has been accepted
+    const_panic
 )]
 
 use static_reflect::{field_offset, StaticReflect, FieldReflect};
