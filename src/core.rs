@@ -1,8 +1,9 @@
 //! Implementations of [StaticReflect] for core types (for `#![no_std]`)
 use crate::StaticReflect;
-use crate::types::{TypeInfo, SimpleNonZeroPointer};
+use crate::types::{TypeInfo, SimpleNonZeroRepr};
 use std::mem::{self, ManuallyDrop};
 use core::ptr::NonNull;
+use std::num::{NonZeroI32, NonZeroU32, NonZeroU8, NonZeroUsize};
 
 macro_rules! impl_primitive {
     ($target:ty => $info:expr) => {
@@ -64,11 +65,30 @@ unsafe impl <T> StaticReflect for *const T {
     const TYPE_INFO: TypeInfo<'static> = TypeInfo::Pointer;
 }
 
-unsafe impl <T> SimpleNonZeroPointer for NonNull<T> {}
+unsafe impl <T> SimpleNonZeroRepr for NonNull<T> {}
 unsafe impl <T> StaticReflect for NonNull<T> {
     const TYPE_INFO: TypeInfo<'static> = TypeInfo::Pointer;
 }
+unsafe impl SimpleNonZeroRepr for NonZeroUsize {}
+unsafe impl StaticReflect for NonZeroUsize {
+    const TYPE_INFO: TypeInfo<'static> = <usize as StaticReflect>::TYPE_INFO;
+}
+unsafe impl SimpleNonZeroRepr for NonZeroU32 {}
+unsafe impl StaticReflect for NonZeroU32 {
+    const TYPE_INFO: TypeInfo<'static> = <u32 as StaticReflect>::TYPE_INFO;
+}
+unsafe impl SimpleNonZeroRepr for NonZeroU8 {}
+unsafe impl StaticReflect for NonZeroU8 {
+    const TYPE_INFO: TypeInfo<'static> = <u8 as StaticReflect>::TYPE_INFO;
+}
+unsafe impl SimpleNonZeroRepr for NonZeroI32 {}
+unsafe impl StaticReflect for NonZeroI32 {
+    const TYPE_INFO: TypeInfo<'static> = <i32 as StaticReflect>::TYPE_INFO;
+}
 
-unsafe impl <T: SimpleNonZeroPointer> StaticReflect for Option<T> {
-    const TYPE_INFO: TypeInfo<'static> = TypeInfo::Pointer;
+
+unsafe impl <T: SimpleNonZeroRepr> StaticReflect for Option<T> {
+    /// We have the representation as our internals,
+    /// except for the fact we might be null
+    const TYPE_INFO: TypeInfo<'static> = <T as StaticReflect>::TYPE_INFO;
 }

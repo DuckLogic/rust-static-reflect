@@ -13,11 +13,11 @@ use zerogc_derive::{unsafe_gc_impl};
 #[cfg(feature = "builtins")]
 use crate::builtins::{AsmSlice, AsmStr};
 
-/// A non-zero pointer type, where optional types
-/// are guaranteed to use the nullable representation
+/// A type which is never zero, and where optional types
+/// are guaranteed to use the null-pointer representation
 ///
 /// If `T: SimpleNonZeroPointer` -> `sizeof(Option<T>) == sizeof(T) && repr(Option<T>) == repr(T)`
-pub unsafe trait SimpleNonZeroPointer: StaticReflect {}
+pub unsafe trait SimpleNonZeroRepr: StaticReflect {}
 
 /// An integer size, named in the style of C/Java
 ///
