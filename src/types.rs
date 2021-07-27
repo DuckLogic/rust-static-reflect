@@ -211,7 +211,7 @@ pub enum TypeInfo<'a> {
  */
 #[cfg(feature = "gc")]
 unsafe_gc_impl! {
-    target => AsmType<'a>,
+    target => TypeInfo<'a>,
     params => ['a],
     bounds => {
         Trace => always,
@@ -565,7 +565,7 @@ pub struct TypeId<'a, T: StaticReflect = ()> {
 #[cfg(feature = "gc")]
 unsafe_gc_impl! {
     target => TypeId<'a, T>,
-    params => ['a, T: AsmRepr],
+    params => ['a, T: StaticReflect],
     bounds => {
         Trace => always,
         TraceImmutable => always,

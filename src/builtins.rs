@@ -5,7 +5,7 @@
 use std::mem::MaybeUninit;
 use crate::{StaticReflect, field_offset, TypeInfo};
 
-#[cfg(feature = "zerogc")]
+#[cfg(feature = "gc")]
 use zerogc_derive::Trace;
 
 /// A FFi-safe slice type (`&[T]`)
@@ -66,11 +66,11 @@ unsafe impl<T: Sync> Send for AsmSlice<T> {}
 /// and this type does not maintain any invariants.
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "zerogc", derive(Trace))]
-#[cfg_attr(feature = "zerogc", zerogc(nop_trace, copy))]
+#[cfg_attr(feature = "gc", derive(Trace))]
+#[cfg_attr(feature = "gc", zerogc(nop_trace, copy))]
 pub struct AsmStr {
     /// The underlying memory of the string
-    #[cfg_attr(feature = "zerogc", zerogc(unsafe_skip_trace))]
+    #[cfg_attr(feature = "gc", zerogc(unsafe_skip_trace))]
     pub bytes: AsmSlice<u8>
 }
 impl AsmStr {
