@@ -1,4 +1,3 @@
-#![feature(const_raw_ptr_to_usize_cast)]
 use std::os::raw::c_void;
 
 use static_reflect_derive::reflect_func;

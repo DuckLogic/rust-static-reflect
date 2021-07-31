@@ -20,7 +20,7 @@ macro_rules! field_offset {
         unsafe {
             let uninit = core::mem::MaybeUninit::<$target>::uninit();
             let base = uninit.as_ptr();
-            (core::ptr::addr_of!((*base)$(.$field)*).cast::<u8>().offset_from(base as *const u8))
+            (core::ptr::addr_of!((*base)$(.$field)*).cast::<u8>().offset_from(base as *const u8) as usize)
         }
     }
 }

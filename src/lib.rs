@@ -13,18 +13,12 @@
 #![feature(
     const_panic, const_option, // We use Option::unwrap
     const_fn_fn_ptr_basics, // We use PhantomData<fn() -> T>
+    const_fn_trait_bound,
     // Used for field_offset macro
     const_raw_ptr_deref,
     const_maybe_uninit_as_ptr,
     const_ptr_offset_from,
 )]
-/*
- * This is required on recent nightly
- *
- * However it breaks on the version that docs.rs is using (as of this writing).
- * Therefore, we have to turn it off there.
- */
-#![cfg_attr(not(feature="docs-rs"), feature(const_fn_trait_bound))]
 #![cfg_attr(feature = "never", feature(never_type))]
 
 mod macros;
