@@ -18,12 +18,9 @@ macro_rules! define_extern_type {
 macro_rules! field_offset {
     ($target:path, $($field:ident),+) => {
         unsafe {
-            /*
-             * I'm going to assume the dereference is safe,
-             * because of the presense of '(*uninit.as_mut_ptr()).field'
-             * in the documentation for std::ptr::addr_of_mut
-             */
-            (std::ptr::addr_of!((*(1 as *mut $target))$(.$field)*) as usize) - 1
+            let uninit = core::mem::MaybeUninit::<$target>::uninit();
+            let base = uninit.as_ptr();
+            (core::ptr::addr_of!((*base)$(.$field)*).cast::<u8>().offset_from(base as *const u8))
         }
     }
 }

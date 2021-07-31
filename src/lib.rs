@@ -15,7 +15,8 @@
     const_fn_fn_ptr_basics, // We use PhantomData<fn() -> T>
     // Used for field_offset macro
     const_raw_ptr_deref,
-    const_raw_ptr_to_usize_cast,
+    const_maybe_uninit_as_ptr,
+    const_ptr_offset_from,
 )]
 /*
  * This is required on recent nightly
