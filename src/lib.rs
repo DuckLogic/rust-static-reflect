@@ -32,6 +32,9 @@ mod core;
 
 pub use crate::types::TypeInfo;
 
+use crate::types::{IntType, IntSize, FloatSize};
+use std::ops::{Sub, Mul, Add};
+
 /// The trait for types whose information can be accessed via static reflection.
 ///
 /// In order to proper access any fields,
@@ -58,6 +61,24 @@ pub unsafe trait StaticReflect {
     const TYPE_INFO: TypeInfo<'static>;
 }
 
+/// A primitive integer type
+pub unsafe trait PrimInt: StaticReflect + Copy + Add<Self> + Sub<Self> + Mul<Self> + sealed::Sealed {
+    /// The [IntType] of this integer
+    const INT_TYPE: IntType;
+    /// Whether or not this integer is signed
+    const SIGNED: bool;
+    /// The size of this integer
+    ///
+    /// If this integer is pointer-sized (`isize`/`usize`),
+    /// then this will be its runtime size on the current platform.
+    const INT_SIZE: IntSize;
+}
+/// A primitive float type
+pub unsafe trait PrimFloat: StaticReflect + Copy + sealed::Sealed {
+    /// The size of this float
+    const FLOAT_SIZE: FloatSize;
+}
+
 /// A type that supports accessing its fields via reflection.
 /// 
 /// All fields are assumed to be defined in a way that is compatible
@@ -72,4 +93,8 @@ pub unsafe trait FieldReflect: StaticReflect {
     /// Static information on this structure's fields,
     /// where each field's information is given by name
     const NAMED_FIELD_INFO: Self::NamedFieldInfo;
+}
+
+mod sealed {
+    pub trait Sealed {}
 }

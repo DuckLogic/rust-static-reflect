@@ -1,6 +1,6 @@
 //! Implementations of [StaticReflect] for core types (for `#![no_std]`)
-use crate::StaticReflect;
-use crate::types::{TypeInfo, SimpleNonZeroRepr};
+use crate::{StaticReflect, PrimInt, PrimFloat};
+use crate::types::{TypeInfo, IntSize, IntType, SimpleNonZeroRepr, FloatSize};
 use std::mem::{self, ManuallyDrop};
 use core::ptr::NonNull;
 use std::num::{NonZeroI32, NonZeroU32, NonZeroU8, NonZeroUsize};
@@ -15,13 +15,15 @@ macro_rules! impl_primitive {
 macro_rules! impl_ints {
     ($($target:ty),*) => {
         $(unsafe impl StaticReflect for $target {
+            const TYPE_INFO: TypeInfo<'static> = TypeInfo::Integer(Self::INT_TYPE);
+        }
+        unsafe impl PrimInt for $target {
+            const INT_SIZE: IntSize = IntSize::unwrap_from_bytes(std::mem::size_of::<Self>());
             #[allow(unused_comparisons)]
-            const TYPE_INFO: TypeInfo<'static> = {
-                let size = std::mem::size_of::<$target>();
-                let signed = <$target>::MIN < 0;
-                TypeInfo::integer(size, signed)
-            };
-        })*
+            const SIGNED: bool = <$target>::MIN < 0;
+            const INT_TYPE: IntType = IntType { size: Self::INT_SIZE, signed: Self::SIGNED };
+        }
+        impl crate::sealed::Sealed for $target {})*
     }
 }
 // NOTE: Pointer sized integers have machine-dependent implementation :(
@@ -33,6 +35,14 @@ impl_primitive!(() => TypeInfo::Unit);
 impl_primitive!(bool => TypeInfo::Bool);
 impl_primitive!(f32 => TypeInfo::F32);
 impl_primitive!(f64 => TypeInfo::F64);
+impl crate::sealed::Sealed for f32 {}
+unsafe impl PrimFloat for f32 {
+    const FLOAT_SIZE: FloatSize = FloatSize::Single;
+}
+impl crate::sealed::Sealed for f64 {}
+unsafe impl PrimFloat for f64 {
+    const FLOAT_SIZE: FloatSize = FloatSize::Double;
+}
 
 // Builtin support for the never type
 impl_primitive!(! => TypeInfo::Never);

@@ -1,11 +1,11 @@
 //! The static type system
-use crate::{StaticReflect, FieldReflect};
+use crate::{StaticReflect, FieldReflect, PrimInt, PrimFloat};
 
 #[cfg(feature = "num")]
 pub use self::num::{PrimNum, PrimValue};
 use std::cmp::Ordering;
 use std::marker::PhantomData;
-use std::fmt::{self, Formatter, Display, Debug};
+use std::fmt::{self, Formatter, Display, Debug, Write};
 
 #[cfg(feature = "gc")]
 use zerogc_derive::{unsafe_gc_impl};
@@ -40,10 +40,37 @@ pub enum IntSize {
     Long = 8
 }
 impl IntSize {
+    /// Get the size of the specified primitive integer
+    pub const fn of<T: PrimInt>() -> IntSize {
+        T::INT_SIZE
+    }
+    /// A pointer-sized integer
+    pub const POINTER: IntSize = {
+        #[cfg(target_pointer_width = "16")] {
+            IntSize::Short
+        }
+        #[cfg(target_pointer_width = "32")] {
+            IntSize::Int
+        }
+        #[cfg(target_pointer_width = "64")] {
+            IntSize::Long
+        }
+    };
     /// The size of the integer in bytes
     #[inline]
     pub const fn bytes(self) -> usize {
         self as usize
+    }
+    /// Create a new integer with the specified number of bytes,
+    /// panicking if it is invalid
+    ///
+    /// TODO: Remove when `Result::unwrap` becomes a const-fn
+    #[inline]
+    pub const fn unwrap_from_bytes(bytes: usize) -> IntSize {
+        match Self::from_bytes(bytes) {
+            Ok(res) => res,
+            Err(_) => panic!("Invalid number of bytes")
+        }
     }
     /// Get an integer size corresponding to the specified number of bytes
     #[inline]
@@ -55,6 +82,22 @@ impl IntSize {
             8 => IntSize::Long,
             _ => return Err(InvalidSizeErr { bytes })
         })
+    }
+    /// Create an unsigned [IntType] with this size
+    #[inline]
+    pub const fn unsigned(self) -> IntType {
+        IntType {
+            size: self,
+            signed: false
+        }
+    }
+    /// Create an signed [IntType] with this size
+    #[inline]
+    pub const fn signed(self) -> IntType {
+        IntType {
+            size: self,
+            signed: true
+        }
     }
 }
 impl Default for IntSize {
@@ -91,6 +134,11 @@ pub enum FloatSize {
     Double = 8
 }
 impl FloatSize {
+    /// Get the size of the specified float
+    #[inline]
+    pub const fn of<T: PrimFloat>() -> FloatSize {
+        T::FLOAT_SIZE
+    }
     /// The number of bytes for a float of this size
     #[inline]
     pub const fn bytes(self) -> usize {
@@ -111,6 +159,64 @@ impl Default for FloatSize {
     #[inline]
     fn default() -> FloatSize {
         FloatSize::Double
+    }
+}
+
+/// An integer type
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub struct IntType {
+    /// The size of this integer
+    pub size: IntSize,
+    /// If this integer is signed
+    pub signed: bool,
+}
+impl IntType {
+    /// Get the type of the specified primitive integer
+    #[inline]
+    pub const fn of<T: PrimInt>() -> IntType {
+        T::INT_TYPE
+    }
+    /// The alignment of this integer
+    #[inline]
+    pub const fn align(&self) -> usize {
+        use std::mem::align_of;
+        match *self {
+            IntType { size: IntSize::Byte, signed: false } => align_of::<u8>(),
+            IntType { size: IntSize::Short, signed: false } => align_of::<u16>(),
+            IntType { size: IntSize::Int, signed: false } => align_of::<u32>(),
+            IntType { size: IntSize::Long, signed: false } => align_of::<u64>(),
+            IntType { size: IntSize::Byte, signed: true } => align_of::<i8>(),
+            IntType { size: IntSize::Short, signed: true } => align_of::<i16>(),
+            IntType { size: IntSize::Int, signed: true } => align_of::<i32>(),
+            IntType { size: IntSize::Long, signed: true } => align_of::<i64>(),
+        }
+    }
+    /// The type of the unsigned `u8` integer
+    pub const U8: IntType = IntSize::Byte.unsigned();
+    /// The type of the unsigned `u16` integer
+    pub const U16: IntType = IntSize::Short.unsigned();
+    /// The type of the unsigned `u32` integer
+    pub const U32: IntType = IntSize::Int.unsigned();
+    /// The type of the unsigned `u64` integer
+    pub const U64: IntType = IntSize::Long.unsigned();
+    /// The type of the unsigned `usize` integer
+    pub const USIZE: IntType = IntSize::POINTER.unsigned();
+    /// The type of the signed `i8` integer
+    pub const I8: IntType = IntSize::Byte.signed();
+    /// The type of the signed `i16` integer
+    pub const I16: IntType = IntSize::Short.signed();
+    /// The type of the signed `i32` integer
+    pub const I32: IntType = IntSize::Int.signed();
+    /// The type of the signed `i64` integer
+    pub const I64: IntType = IntSize::Long.signed();
+    /// The type of the signed `isize` integer
+    pub const ISIZE: IntType = IntSize::POINTER.signed();
+}
+impl Display for IntType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_char(if self.signed { 'i' } else { 'u' })?;
+        write!(f, "{}", self.size.bytes() * 8)?;
+        Ok(())
     }
 }
 
@@ -138,12 +244,7 @@ pub enum TypeInfo<'a> {
     /// Anything else is undefined behavior.
     Bool,
     /// An integer
-    Integer {
-        /// The size of the integer
-        size: IntSize,
-        /// If the integer is signed
-        signed: bool
-    },
+    Integer(IntType),
     /// A floating point number
     Float {
         /// The size/precision of the float
@@ -232,18 +333,6 @@ impl TypeInfo<'static> {
     pub const F32: Self = TypeInfo::Float { size: FloatSize::Single };
     /// A 64-bit, double-precision float
     pub const F64: Self = TypeInfo::Float { size: FloatSize::Double };
-
-    /// An integer with the specified size and signed-ness
-    ///
-    /// Panics if the size is invalid
-    #[inline]
-    pub const fn integer(size: usize, signed: bool) -> Self {
-        let size = match IntSize::from_bytes(size) {
-            Ok(s) => s,
-            Err(_) => panic!("Invalid size")
-        };
-        TypeInfo::Integer { size, signed }
-    }
 }
 impl<'tp> TypeInfo<'tp> {
     /// The size of the type, in bytes
@@ -255,7 +344,7 @@ impl<'tp> TypeInfo<'tp> {
             #[cfg(feature = "never")]
             Never => size_of::<!>(),
             Bool => size_of::<bool>(),
-            Integer { size, signed: _ } => size.bytes(),
+            Integer(IntType { size, .. }) => size.bytes(),
             Float { size } => size.bytes(),
             #[cfg(feature = "builtins")]
             Slice { .. } => std::mem::size_of::<AsmSlice<()>>(),
@@ -279,14 +368,7 @@ impl<'tp> TypeInfo<'tp> {
             TypeInfo::Never => align_of::<!>(),
             TypeInfo::Magic { .. } | TypeInfo::Extern { .. } => 0,
             TypeInfo::Bool => align_of::<bool>(),
-            TypeInfo::Integer { size: IntSize::Byte, signed: false } => align_of::<u8>(),
-            TypeInfo::Integer { size: IntSize::Short, signed: false } => align_of::<u16>(),
-            TypeInfo::Integer { size: IntSize::Int, signed: false } => align_of::<u32>(),
-            TypeInfo::Integer { size: IntSize::Long, signed: false } => align_of::<u64>(),
-            TypeInfo::Integer { size: IntSize::Byte, signed: true } => align_of::<i8>(),
-            TypeInfo::Integer { size: IntSize::Short, signed: true } => align_of::<i16>(),
-            TypeInfo::Integer { size: IntSize::Int, signed: true } => align_of::<i32>(),
-            TypeInfo::Integer { size: IntSize::Long, signed: true } => align_of::<i64>(),
+            TypeInfo::Integer(tp) => tp.align(),
             TypeInfo::Float { size: FloatSize::Single } => align_of::<f32>(),
             TypeInfo::Float { size: FloatSize::Double } => align_of::<f64>(),
             #[cfg(feature = "builtins")]
@@ -305,8 +387,7 @@ impl<'a> Display for TypeInfo<'a> {
             TypeInfo::Unit => f.write_str("()"),
             TypeInfo::Never => f.write_str("!"),
             TypeInfo::Bool => f.write_str("bool"),
-            TypeInfo::Integer { size, signed: true } => write!(f, "i{}", size.bytes() * 8),
-            TypeInfo::Integer { size, signed: false } => write!(f, "u{}", size.bytes() * 8),
+            TypeInfo::Integer(tp) => write!(f, "{}", tp),
             TypeInfo::Float { size } => write!(f, "f{}", size.bytes() * 8),
             TypeInfo::Slice { element_type } => write!(f, "[{}]", element_type),
             TypeInfo::Str => f.write_str("str"),
@@ -420,32 +501,6 @@ impl<'a, T: StaticReflect> UnionFieldDef<'a, T> {
     }
 }
 
-#[cfg(feature = "num")]
-pub mod num {
-    use num_traits::Num;
-    use crate::NativeRepr;
-    use std::fmt::Debug;
-
-    pub trait PrimValue: NativeRepr + PartialEq + Copy + Debug {}
-    impl PrimValue for bool {}
-    impl PrimValue for () {}
-    impl PrimValue for ! {}
-    impl<T> PrimValue for *mut T {}
-    impl<T: PrimNum> PrimValue for T {}
-
-    pub trait PrimNum: NativeRepr + Num + Debug + Copy {}
-    macro_rules! prim_num {
-        ($($target:ty),*) => {$(
-            impl PrimNum for $target {}
-        )*};
-    }
-    prim_num!(i8, u8, i16, u16, i32, u32, i64, u64, isize, usize, f32, f64);
-    pub trait PrimFloat: PrimNum {}
-    impl PrimFloat for f32 {}
-    impl PrimFloat for f64 {}
-}
-
-
 /// A primitive type
 ///
 /// Although rust doesn't truly have a concept of 'primitives',
@@ -467,12 +522,7 @@ pub enum PrimitiveType {
     /// An untyped pointer (which is possibly null)
     Pointer,
     /// An integer
-    Integer {
-        /// The size of the integer
-        size: IntSize,
-        /// If the integer is signed
-        signed: bool
-    },
+    Integer(IntType),
     /// A float
     Float {
         /// The size/precision of the float
@@ -490,14 +540,14 @@ impl PrimitiveType {
             Never => &TypeInfo::Never,
             Bool => &TypeInfo::Bool,
             Pointer => &TypeInfo::Pointer,
-            Integer { size: Byte, signed: true } => &TypeInfo::Integer { size: Byte, signed: true },
-            Integer { size: Short, signed: true } => &TypeInfo::Integer { size: Short, signed: true },
-            Integer { size: Int, signed: true } => &TypeInfo::Integer { size: Int, signed: true },
-            Integer { size: Long, signed: true } => &TypeInfo::Integer { size: Long, signed: true },
-            Integer { size: Byte, signed: false } => &TypeInfo::Integer { size: Byte, signed: false },
-            Integer { size: Short, signed: false } => &TypeInfo::Integer { size: Int, signed: false },
-            Integer { size: Int, signed: false } => &TypeInfo::Integer { size: Short, signed: false },
-            Integer { size: Long, signed: false } => &TypeInfo::Integer { size: Long, signed: false },
+            Integer(IntType { size: Byte, signed: true }) => &TypeInfo::Integer(IntType::U8),
+            Integer(IntType { size: Short, signed: true }) => &TypeInfo::Integer(IntType::U16),
+            Integer(IntType  { size: Int, signed: true }) => &TypeInfo::Integer(IntType::U32),
+            Integer(IntType { size: Long, signed: true }) => &TypeInfo::Integer(IntType::U64),
+            Integer(IntType { size: Byte, signed: false }) => &TypeInfo::Integer(IntType::I8),
+            Integer(IntType { size: Short, signed: false }) => &TypeInfo::Integer(IntType::I16),
+            Integer(IntType { size: Int, signed: false }) => &TypeInfo::Integer(IntType::I32),
+            Integer(IntType { size: Long, signed: false }) => &TypeInfo::Integer(IntType::I64),
             Float { size: Single } => &TypeInfo::Float { size: Single },
             Float { size: Double } => &TypeInfo::Float { size: Double },
         }
@@ -507,7 +557,7 @@ impl PrimitiveType {
     pub fn bytes(&self) -> usize {
         match self {
             PrimitiveType::Unit | PrimitiveType::Never => 0,
-            PrimitiveType::Integer { size, signed: _ } => size.bytes(),
+            PrimitiveType::Integer(tp) => tp.size.bytes(),
             PrimitiveType::Float { size } => size.bytes(),
             PrimitiveType::Pointer => {
                 assert_eq!(std::mem::size_of::<usize>(), std::mem::size_of::<*mut ()>());
@@ -530,8 +580,8 @@ impl PartialOrd for PrimitiveType {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (*self, *other) {
             (
-                PrimitiveType::Integer { size: first, signed: first_signed },
-                PrimitiveType::Integer { size: second, signed: second_signed }
+                PrimitiveType::Integer(IntType { size: first, signed: first_signed }),
+                PrimitiveType::Integer(IntType { size: second, signed: second_signed })
             ) => {
                 Some(first.cmp(&second)
                     .then(first_signed.cmp(&second_signed)))
@@ -653,7 +703,7 @@ impl<'tp, T: StaticReflect> TypeId<'tp, T> {
             TypeInfo::Never => PrimitiveType::Never,
             TypeInfo::Bool => PrimitiveType::Bool,
             TypeInfo::Pointer => PrimitiveType::Pointer,
-            TypeInfo::Integer { size, signed } => PrimitiveType::Integer { size, signed },
+            TypeInfo::Integer(tp) => PrimitiveType::Integer(tp),
             TypeInfo::Float { size } => PrimitiveType::Float { size },
             _ => return None
         })
