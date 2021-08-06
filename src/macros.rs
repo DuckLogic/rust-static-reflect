@@ -56,8 +56,8 @@ macro_rules! define_extern_type {
 /// ````
 #[macro_export]
 macro_rules! field_offset {
-    ($target:path, $($field:ident).*) => (field_offset!($target, $($field).* as _));
-    ($target:path, $($field:ident).+ as $expected_type:ty) => {
+    ($target:path, $($field:tt).+) => (field_offset!($target, $($field).* as _));
+    ($target:path, $($field:tt).+ as $expected_type:ty) => {
         unsafe {
             let uninit = core::mem::MaybeUninit::<$target>::uninit();
             let base = uninit.as_ptr();

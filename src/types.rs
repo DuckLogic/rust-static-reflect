@@ -423,8 +423,8 @@ impl<T: StaticReflect> Clone for FieldDef<'_, T> {
 /// The definition of a field
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub struct FieldDef<'tp, T: StaticReflect = ()> {
-    /// The name of the field
-    pub name: &'tp str,
+    /// The name of the field, or `None` if this is a tuple struct
+    pub name: Option<&'tp str>,
     /// The type of the field
     pub value_type: TypeId<'tp, T>,
     /// The offset of the field in bytes

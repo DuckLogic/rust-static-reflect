@@ -88,10 +88,38 @@ pub unsafe trait PrimFloat: StaticReflect + Copy + sealed::Sealed {
 /// Implementing this type incorrectly is undefined behavior.
 pub unsafe trait FieldReflect: StaticReflect {
     /// A magic structure that can be used to access
-    /// field info by name
+    /// field info by name (or index).
+    ///
+    /// If this variant is a regular structure,
+    /// this structure will have one `FieldDef` corresponding to each
+    ///named field.
+    /// For example,
+    ///````no_run
+    /// use static_reflect::types::FieldDef;
+    /// struct Example {
+    ///     first: u32,
+    ///     second: u32
+    /// }
+    /// // would generate ->
+    /// struct ExampleNamedFields {
+    ///     first: FieldDef<'static>,
+    ///     second: FieldDef<'static>
+    /// }
+    /// ````
+    ///
+    ///
+    /// If the target struct is a tuple-structs, the 'named field structure' is itself a structure.
+    /// For example,
+    /// ````no_run
+    /// # use static_reflect::types::FieldDef;
+    /// struct Example(u32, String);
+    /// // would generate ->
+    /// struct ExampleNamedFields(FieldDef<'static>, FieldDef<'static>);
+    /// ````
     type NamedFieldInfo;
-    /// Static information on this structure's fields,
-    /// where each field's information is given by name
+    /// Static information on this structure's fields.
+    ///
+    /// This is a singleton value.
     const NAMED_FIELD_INFO: Self::NamedFieldInfo;
 }
 

@@ -22,3 +22,4 @@ path = "../derive-internals"
 [dev-dependencies]
 # Testing
 static-reflect = { version = "0.1.0", path = "../.." }
+pretty_assertions = "0.7.2"

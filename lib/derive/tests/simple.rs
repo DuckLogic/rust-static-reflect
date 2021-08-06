@@ -3,6 +3,7 @@
     // RFC has been accepted
     const_panic
 )]
+use pretty_assertions::assert_eq;
 
 use static_reflect::{field_offset, StaticReflect, FieldReflect};
 use static_reflect::types::{TypeInfo, FieldDef, StructureDef, UnionDef, UnionFieldDef, TypeId};
@@ -96,56 +97,56 @@ fn test_struct_types() {
     });
     assert_eq!(Nested::TYPE_INFO, NESTED_TYPE);
     assert_eq!(Nested::NAMED_FIELD_INFO.cycle, FieldDef {
-        name: "cycle",
+        name: Some("cycle"),
         value_type: TypeId::<*mut SimpleStruct>::get(),
         offset: field_offset!(Nested, cycle),
         index: 0
     });
     assert_eq!(Nested::NAMED_FIELD_INFO.float, FieldDef {
-        name: "float",
+        name: Some("float"),
         value_type: TypeId::<f64>::get(),
         offset: field_offset!(Nested, float),
         index: 1
     });
     assert_eq!(Nested::NAMED_FIELD_INFO.number, FieldDef {
-        name: "number",
+        name: Some("number"),
         value_type: TypeId::<u64>::get(),
         offset: field_offset!(Nested, number),
         index: 2
     });
     let fields = vec![
         FieldDef {
-            name: "text",
+            name: Some("text"),
             value_type: TypeId::erased::<*mut String>(),
             offset: field_offset!(SimpleStruct, text),
             index: 0
         },
         FieldDef {
-            name: "number",
+            name: Some("number"),
             value_type: TypeId::erased::<u32>(),
             offset: field_offset!(SimpleStruct, number),
             index: 1
         },
         FieldDef {
-            name: "float",
+            name: Some("float"),
             value_type: TypeId::erased::<f64>(),
             offset: field_offset!(SimpleStruct, float),
             index: 2
         },
         FieldDef {
-            name: "b",
+            name: Some("b"),
             value_type: TypeId::erased::<bool>(),
             offset: field_offset!(SimpleStruct, b),
             index: 3
         },
         FieldDef {
-            name: "unit",
+            name: Some("unit"),
             value_type: TypeId::erased::<()>(),
             offset: field_offset!(SimpleStruct, unit),
             index: 4
         },
         FieldDef {
-            name: "nested_struct",
+            name: Some("nested_struct"),
             // NOTE: We already checked Nested::STATIC_TYPE
             value_type: TypeId::erased::<Nested>(),
             offset: field_offset!(SimpleStruct, nested_struct),
@@ -160,6 +161,49 @@ fn test_struct_types() {
             fields: static_fields,
             size: size_of::<SimpleStruct>(),
             alignment: align_of::<SimpleStruct>(),
+        })
+    );
+}
+
+
+#[derive(StaticReflect)]
+#[repr(C)]
+struct SimpleTupleStruct(*mut String, f32, Nested);
+
+#[test]
+fn test_tuple_struct() {
+    let fields = vec![
+        FieldDef {
+            name: None,
+            value_type: TypeId::erased::<*mut String>(),
+            offset: field_offset!(SimpleTupleStruct, 0),
+            index: 0
+        },
+        FieldDef {
+            name: None,
+            value_type: TypeId::erased::<f32>(),
+            offset: field_offset!(SimpleTupleStruct, 1),
+            index: 1
+        },
+        FieldDef {
+            name: None,
+            // NOTE: We already checked Nested::STATIC_TYPE
+            value_type: TypeId::erased::<Nested>(),
+            offset: field_offset!(SimpleTupleStruct, 2),
+            index: 2
+        },
+    ];
+    assert_eq!(SimpleTupleStruct::NAMED_FIELD_INFO.0.erase(), fields[0]);
+    assert_eq!(SimpleTupleStruct::NAMED_FIELD_INFO.1.erase(), fields[1]);
+    assert_eq!(SimpleTupleStruct::NAMED_FIELD_INFO.2.erase(), fields[2]);
+    let static_fields = leak_vec(fields);
+    assert_eq!(
+        SimpleTupleStruct::TYPE_INFO,
+        TypeInfo::Structure(&StructureDef {
+            name: "SimpleTupleStruct",
+            fields: static_fields,
+            size: size_of::<SimpleTupleStruct>(),
+            alignment: align_of::<SimpleTupleStruct>(),
         })
     );
 }
@@ -186,13 +230,13 @@ fn test_options() {
     });
     assert_eq!(OPAQUE_ARRAY_TYPE, OpaqueArray::TYPE_INFO);
     assert_eq!(OpaqueArray::NAMED_FIELD_INFO.first, FieldDef {
-        name: "first",
+        name: Some("first"),
         value_type: TypeId::<i8>::get(), // It's actually a 'u8', but we assume_repr
         offset: field_offset!(OpaqueArray, first),
         index: 0
     });
     assert_eq!(OpaqueArray::NAMED_FIELD_INFO.array, FieldDef {
-        name: "array",
+        name: Some("array"),
         value_type: TypeId::<*mut String>::get(),
         offset: field_offset!(OpaqueArray, array),
         index: 1

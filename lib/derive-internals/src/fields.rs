@@ -1,4 +1,4 @@
-use quote::quote;
+use quote::{quote, format_ident};
 use syn::{parenthesized, Token, parse_quote, DeriveInput, Data, Generics, GenericParam, TypeParamBound, DataEnum, DataStruct, DataUnion, Type};
 use proc_macro2::{TokenStream, Ident, Span};
 use syn::parse::{self, Parse, ParseStream};
@@ -154,16 +154,24 @@ fn handle_type<'a, T: TypeHandler<'a>>(
     where_clause: TokenStream,
     extra_defs: &mut Vec<TokenStream>
 ) ->  Result<TokenStream, syn::Error> {
-    let mut field_info: IndexMap<Ident, TokenStream> = IndexMap::new();
+    let mut field_info: IndexMap<FieldName<'a>, TokenStream> = IndexMap::new();
     let mut field_associated_types = Vec::new();
     let mut field_defs = Vec::new();
     target.handle_fields(|field| {
         let field_name = field.name;
         let field_type = &field.static_type;
         field_info.insert(field_name.clone(), field.static_def.clone());
-        field_associated_types.push(quote!(type #field_name = #field_type;));
+        let associated_type_name = field_name.associated_type_name();
+        field_associated_types.push(quote!(type #associated_type_name = #field_type;));
         let field_def_type = T::field_def_type(Some(quote!(#field_type)));
-        field_defs.push(quote!(pub #field_name: #field_def_type,));
+        match field_name {
+            FieldName::Tuple { index: _ } => {
+                field_defs.push(quote!(pub #field_def_type));
+            }
+            FieldName::Named { name } => {
+                field_defs.push(quote!(pub #name: #field_def_type));
+            }
+        }
     })?;
     let field_info_struct_name = Ident::new(
         &format!("_FieldInfo{}", name),
@@ -173,17 +181,27 @@ fn handle_type<'a, T: TypeHandler<'a>>(
         &format!("_FieldTrait{}", name),
         name.span()
     );
-    let field_names = field_info.keys().collect::<Vec<_>>();
-    extra_defs.push(quote!(
-        #[allow(missing_docs)]
-        #[doc(hidden)]
-        pub struct #field_info_struct_name {
-            #(#field_defs)*
+    let associated_type_names = field_info.keys().map(FieldName::associated_type_name);
+    let field_info_struct_def = {
+        let fields = quote!(#(#field_defs),*);
+        let fields = if target.is_tuple_style() {
+            // NOTE: I guess a tuple-struct needs a semicolon but a regular struct doesn't....
+            quote!((#fields);)
+        } else {
+            quote!({ #fields })
+        };
+        quote! {
+            #[allow(missing_docs)]
+            #[doc(hidden)]
+            pub struct #field_info_struct_name #fields
         }
+    };
+    extra_defs.push(quote!(
+        #field_info_struct_def
         #[allow(non_camel_case_types)]
         #[doc(hidden)]
         trait #field_info_trait_name {
-            #(type #field_names;)*
+            #(type #associated_type_names;)*
         }
         #[allow(non_camel_case_types)]
         impl #impl_generics #field_info_trait_name for #name #ty_generics #where_clause {
@@ -191,17 +209,23 @@ fn handle_type<'a, T: TypeHandler<'a>>(
         }
     ));
     let field_inits = field_info.iter()
-        .map(|(name, def)| quote!(#name: #def,))
+        .map(|(name, def)| match name {
+            FieldName::Tuple { .. } => quote!(#def),
+            FieldName::Named { name } => quote!(#name: #def)
+        })
         .collect::<Vec<TokenStream>>();
+    let field_inits = if target.is_tuple_style() {
+        quote!((#(#field_inits,)*))
+    } else {
+        quote!({#(#field_inits,)*})
+    };
     extra_defs.push(quote!(
         unsafe impl #impl_generics static_reflect::FieldReflect for #name #ty_generics #where_clause {
             type NamedFieldInfo = #field_info_struct_name;
-            const NAMED_FIELD_INFO: Self::NamedFieldInfo = #field_info_struct_name {
-                #(#field_inits)*
-            };
+            const NAMED_FIELD_INFO: Self::NamedFieldInfo = #field_info_struct_name #field_inits;
         }
     ));
-    let field_names = field_info.keys().collect::<Vec<_>>();
+    let field_access = field_info.keys().map(|name| name.access()).collect::<Vec<_>>();
     let field_def_type_name = T::field_def_type(None);
     let type_def_type = T::type_def_type();
     let header = quote! {
@@ -209,7 +233,7 @@ fn handle_type<'a, T: TypeHandler<'a>>(
         use static_reflect::types::TypeInfo;
         use #field_def_type_name;
         use #type_def_type;
-        const _FIELDS: &'static [#field_def_type_name<'static>] = &[#(<#name as FieldReflect>::NAMED_FIELD_INFO.#field_names.erase()),*];
+        const _FIELDS: &'static [#field_def_type_name<'static>] = &[#(<#name as FieldReflect>::NAMED_FIELD_INFO.#field_access.erase()),*];
     };
     let static_def = target.create_static_def(header);
     let into_type = T::def_into_type(quote!(_DEF));
@@ -232,14 +256,41 @@ fn enum_static_type(data: &DataEnum, name: &Ident) -> Result<TokenStream, syn::E
     }
 }
 trait TypeHandler<'a> {
+    fn is_tuple_style(&self) -> bool;
     fn field_def_type(field_type: Option<TokenStream>) -> TokenStream;
     fn type_def_type() -> TokenStream;
     fn def_into_type(def_ref: TokenStream) -> TokenStream;
     fn handle_fields<F: FnMut(FieldInfo<'a>)>(&mut self, handler: F) -> syn::Result<()>;
     fn create_static_def(self, header: TokenStream) -> TokenStream;
 }
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum FieldName<'a> {
+    Tuple {
+        index: usize,
+    },
+    Named {
+        name: &'a Ident
+    }
+}
+impl FieldName<'_> {
+    pub fn access(&self) -> TokenStream {
+        match *self {
+            FieldName::Tuple { index } => {
+                let idx = syn::Index::from(index);
+                quote!(#idx)
+            },
+            FieldName::Named { name } => quote!(#name),
+        }
+    }
+    pub fn associated_type_name(&self) -> Ident {
+        match *self {
+            FieldName::Tuple { index } => format_ident!("_Tuple_{}", index),
+            FieldName::Named { name } => name.clone()
+        }
+    }
+}
 struct FieldInfo<'a> {
-    name: &'a Ident,
+    name: FieldName<'a>,
     static_type: Type,
     static_def: TokenStream
 }
@@ -256,6 +307,9 @@ impl<'a> StructHandler<'a> {
     }
 }
 impl<'a> TypeHandler<'a> for StructHandler<'a> {
+    fn is_tuple_style(&self) -> bool {
+        matches!(self.data.fields, syn::Fields::Unnamed(_))
+    }
 
     fn field_def_type(field_type: Option<TokenStream>) -> TokenStream {
         match field_type {
@@ -274,7 +328,7 @@ impl<'a> TypeHandler<'a> for StructHandler<'a> {
 
     fn handle_fields<F: FnMut(FieldInfo<'a>)>(&mut self, mut handler: F) -> syn::Result<()> {
         /*
-         * NOTE: Layout algorithim for repr(C) given in reference
+         * NOTE: Layout algorithm for repr(C) given in reference
          * https://doc.rust-lang.org/reference/type-layout.html#reprc-structs
          * We have to use recursion to compute offsets :(
          */
@@ -282,7 +336,10 @@ impl<'a> TypeHandler<'a> for StructHandler<'a> {
         for (index, field) in self.data.fields.iter().enumerate() {
             let DeriveFieldOptions { opaque_array, assume_repr } =
                 DeriveFieldOptions::parse_attrs(&field.attrs)?;
-            let field_name = field.ident.as_ref().expect("Need named fields");
+            let field_name = match field.ident {
+                Some(ref name) => FieldName::Named { name },
+                None => FieldName::Tuple { index }
+            };
             let mut field_type = field.ty.clone();
             let original_type = field_type.clone();
             if opaque_array {
@@ -320,8 +377,12 @@ impl<'a> TypeHandler<'a> for StructHandler<'a> {
                 let rem = old_offset % std::mem::align_of::<#original_type>();
                 old_offset + (if rem == 0 { 0 } else { std::mem::align_of::<#original_type>() - rem })
             });
+            let name_field_value = match field_name {
+                FieldName::Tuple { .. } => quote!(None),
+                FieldName::Named { name } => quote!(Some(stringify!(#name)))
+            };
             let static_def = quote!(::static_reflect::types::FieldDef {
-                name: stringify!(#field_name),
+                name: #name_field_value,
                 value_type: ::static_reflect::types::TypeId::<#field_type>::get(),
                 offset: #current_offset,
                 index: #index
@@ -378,6 +439,10 @@ struct UnionTypeHandler<'a> {
     name: &'a Ident
 }
 impl<'a> TypeHandler<'a> for UnionTypeHandler<'a> {
+    fn is_tuple_style(&self) -> bool {
+        false // unions can't have tuple-fields
+    }
+
     fn field_def_type(field_type: Option<TokenStream>) -> TokenStream {
         match field_type {
             None => quote!(static_reflect::types::UnionFieldDef),
@@ -395,7 +460,7 @@ impl<'a> TypeHandler<'a> for UnionTypeHandler<'a> {
 
     fn handle_fields<F: FnMut(FieldInfo<'a>)>(&mut self, mut handler: F) -> syn::Result<()> {
         /*
-         * NOTE: Layout algorithim for repr(C) given in reference
+         * NOTE: Layout algorithm for repr(C) given in reference
          * https://doc.rust-lang.org/reference/type-layout.html#reprc-unions
          *
          * Unions are pretty simple since they're just glorified `mem::transmute`
@@ -420,7 +485,7 @@ impl<'a> TypeHandler<'a> for UnionTypeHandler<'a> {
                 index: #index
             });
             handler(FieldInfo {
-                name: field_name,
+                name: FieldName::Named { name: field_name },
                 static_type: field_type,
                 static_def
             });
