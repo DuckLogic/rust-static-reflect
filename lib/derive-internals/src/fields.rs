@@ -242,8 +242,22 @@ fn handle_type<'a, T: TypeHandler<'a>>(
         #into_type
     }))
 }
+fn is_c_style_enum(data: &DataEnum) -> bool {
+    /*
+     * TODO: Should the following be considered a 'c-style' enum?
+     * enum Test {
+     *     One,
+     *     Two {  },
+     *     Three( )
+     * }
+     *
+     * Right now it *is*, because `fields.is_empty`,
+     * although we could require them all to be unit-variants (like `One`)
+     */
+    data.variants.iter().all(|var| var.fields.is_empty())
+}
 fn enum_static_type(data: &DataEnum, name: &Ident) -> Result<TokenStream, syn::Error> {
-    if data.variants.iter().all(|var| var.fields.is_empty()) {
+    if is_c_style_enum(data) {
         // C-style enum
         // TODO: Strict typing
         // TODO: Should we always assume that we're unsigned?
@@ -451,11 +465,11 @@ impl<'a> TypeHandler<'a> for UnionTypeHandler<'a> {
     }
 
     fn type_def_type() -> TokenStream {
-        quote!(static_reflect::types::UnionDef)
+        quote!(static_reflect::types::UntaggedUnionDef)
     }
 
     fn def_into_type(def_ref: TokenStream) -> TokenStream {
-        quote!(static_reflect::types::TypeInfo::Union(#def_ref))
+        quote!(static_reflect::types::TypeInfo::UntaggedUnion(#def_ref))
     }
 
     fn handle_fields<F: FnMut(FieldInfo<'a>)>(&mut self, mut handler: F) -> syn::Result<()> {
@@ -498,7 +512,7 @@ impl<'a> TypeHandler<'a> for UnionTypeHandler<'a> {
         quote!({
             use std::mem::{size_of, align_of};
             #header
-            let def = UnionDef {
+            let def = UntaggedUnionDef {
                 name: stringify!(#name),
                 fields: _FIELDS,
                 size: size_of::<#name>(),

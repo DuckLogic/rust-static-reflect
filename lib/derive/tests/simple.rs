@@ -6,7 +6,7 @@
 use pretty_assertions::assert_eq;
 
 use static_reflect::{field_offset, StaticReflect, FieldReflect};
-use static_reflect::types::{TypeInfo, FieldDef, StructureDef, UnionDef, UnionFieldDef, TypeId};
+use static_reflect::types::{TypeInfo, FieldDef, StructureDef, UntaggedUnionDef, UnionFieldDef, TypeId};
 use std::mem::{size_of, align_of};
 
 use static_reflect_derive::{StaticReflect};
@@ -49,7 +49,7 @@ union SimpleUnion {
 
 #[test]
 fn test_union_types() {
-    const EXPECTED_UNION: TypeInfo<'static> = TypeInfo::Union(&UnionDef {
+    const EXPECTED_UNION: TypeInfo<'static> = TypeInfo::UntaggedUnion(&UntaggedUnionDef {
         name: "SimpleUnion",
         fields: &[
             SimpleUnion::NAMED_FIELD_INFO.text.erase(),

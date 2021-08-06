@@ -12,6 +12,7 @@ use zerogc_derive::{unsafe_gc_impl};
 
 #[cfg(feature = "builtins")]
 use crate::builtins::{AsmSlice, AsmStr};
+use std::alloc::Layout;
 
 /// A type which is never zero, and where optional types
 /// are guaranteed to use the null-pointer representation
@@ -220,6 +221,153 @@ impl Display for IntType {
     }
 }
 
+/// Represents the different styles of FFI-compatible tagged unions.
+///
+/// According to [RFC #2195](https://github.com/rust-lang/rfcs/blob/master/text/2195-really-tagged-unions.md),
+/// there are two different representations for tagged unions in Rust:
+/// 1. The ["traditional" representation](https://doc.rust-lang.org/stable/reference/type-layout.html#reprc-enums-with-fields) (`#[repr(C)]`)
+/// 2. The ["primitive" representation](https://doc.rust-lang.org/stable/reference/type-layout.html#primitive-representation-of-enums-with-fields)] (`#[repr(u8)]`, `#[repr(isize)]`, etc...)
+///
+/// ## Traditional representation (default)
+/// The "traditional" representation is the most intuitive representation of tagged unions, and is
+/// what you would expect coming from a C/C++ background. It is the default if `#[repr(C)]` is specified:
+///
+/// ````no_run
+/// #[repr(C)]
+/// enum Traditional {
+///     One(u8, u16),
+///     Two(u8)
+/// }
+/// /* ---- is equivalent to ---- */
+/// #[repr(C)]
+/// enum TraditionalTag {
+///     One,
+///     Two
+/// }
+/// #[repr(C)]
+/// union TraditionalData {
+///     one: (u8, u16),
+///     two: u8
+/// }
+/// #[repr(C)]
+/// struct TraditionalRepr {
+///     tag: TraditionalTag,
+///     data: TraditionalData,
+/// }
+/// ````
+/// This appears all fine and dandy, until you realize that the `u16` in the first variant needs 16-bit
+/// alignment. This means that `TraditionalData.one` needs a padding byte between the `u8` and the `u16`,
+/// making `mem::size_of::<TraditionalData>() == 4`, even though it only has 3 bytes of meaningful dataa.
+///
+/// Since that `TraditionalTag` is *separate* from `TraditionalData`,
+/// this makes `mem::size_of::<TraditionalRepr>() == 5` (even though it only has 4 bytes of meaningful data):
+/// `[<tag>, u8, <wasted padding>, u16]`
+///
+/// Despite this wasted space, this is the default layout for `#[repr(C)]` enums,
+/// because it's easier to use with C-code.
+///
+/// ## The "primitive" representation
+/// The "primitive" representation of tagged enums have the same
+/// names as the primitive integer types. For example `#[repr(u8)]`, `#[repr(isize)]`, etc..
+///
+/// See the [reference](https://doc.rust-lang.org/stable/reference/type-layout.html#primitive-representation-of-enums-with-fields)
+/// for the official documentation on this representation.
+///
+/// This layout is more "efficient" than the 'traditional' representation,
+/// by specifying `#[repr(u8)]` (or some other specific variant type).
+///
+/// It represents a Rust enum as a union of structs,
+/// where each individual sub-struct starts with the tag enum.
+///
+/// This avoids any wasted padding bytes, but is slightly harder to use and seems
+/// unexpected if you come from a C/C++ background.
+/// ````no_run
+/// # #![feature(untagged_unions)]
+/// #[repr(u8)]
+/// enum Efficient {
+///     One(u8, u16),
+///     Two(u16)
+/// }
+/// #[repr(u8)]
+/// enum EfficientTag {
+///     One,
+///     Two
+/// }
+/// #[repr(C)]
+/// union EfficientRepr {
+///     one: EfficientVariantOne,
+///     two: EfficientVariantTwo
+/// }
+/// #[repr(C)]
+/// struct EfficientVariantOne {
+///     tag: EfficientTag,
+///     first: u8,
+///     second: u16
+/// }
+/// #[repr(C)]
+/// struct EfficientVariantTwo {
+///     tag: EfficientTag,
+///     data: u16,
+/// }
+/// ````
+/// As you can see, there is no need for padding bytes in `EfficientVariantOne`.
+/// The `second` field is naturally aligned, making the whole `EfficientRepr` only `4` bytes,
+/// in contrast to the 5-byte representation of `TraditionalRepr`.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum TaggedUnionStyle {
+    /// The ["traditional" representation](https://doc.rust-lang.org/nightly/reference/type-layout.html#reprc-enums-with-fields),
+    /// which is specified by `#[repr(C)]`
+    ///
+    /// Essentially, it stores tagged enums as a combination of `(tag, union { data })`.
+    ///
+    /// This is the most intuitive representation, and is what you probably
+    /// expect if you come from a C/C++ background,
+    /// and is the default if you specify `#[repr(C)]`.
+    Traditional,
+    /// The more efficient ["primitive" representation](https://doc.rust-lang.org/nightly/reference/type-layout.html#reprc-enums-with-fields)
+    /// which is specified by `#[repr(u8)]`, `#[repr(isize)]`, etc...
+    ///
+    /// This stores tagged enums as a union, with the tag as the first field of each variant.
+    /// In some cases, this can be more efficient than the "traditional" representation.
+    Primitive
+}
+impl TaggedUnionStyle {
+    /// Compute the `Layout` of an enum with this style and the specified
+    /// discriminant and variant layouts.
+    ///
+    /// Panics if the enum is uninhabited, or an error occurs calculating the combined layouts..
+    pub fn compute_layout(&self, discriminant_size: Layout, variant_layouts: impl Iterator<Item=Layout>) -> Layout {
+        let mut starting_layout = discriminant_size.clone();
+        match *self {
+            TaggedUnionStyle::Traditional => {
+                /*
+                 * this is what makes us different from the "primitive" repr.
+                 * We have padding before the start of each variant.
+                 */
+                starting_layout = starting_layout.pad_to_align();
+            },
+            TaggedUnionStyle::Primitive => {
+                // We're more efficient - no padding before the start of each variant
+            }
+        }
+        let mut max_size = None;
+        let mut max_alignment = starting_layout.align();
+        for variant_layout in variant_layouts {
+            let (combined_layout, _) = starting_layout.extend(variant_layout).unwrap();
+            max_size = Some(max_size.unwrap_or(0).max(combined_layout.size()));
+            max_alignment = max_alignment.max(combined_layout.align());
+        }
+        let size = max_size.expect("Uninhabited enum");
+        Layout::from_size_align(size, max_alignment).unwrap()
+    }
+}
+impl Default for TaggedUnionStyle {
+    #[inline]
+    fn default() -> Self {
+        TaggedUnionStyle::Traditional
+    }
+}
+
 /// A type whose representation is known via reflection
 ///
 /// These are usually defined statically via [StaticReflect
@@ -283,7 +431,17 @@ pub enum TypeInfo<'a> {
     /// A structure
     Structure(&'a StructureDef<'a>),
     /// An untagged union
-    Union(&'a UnionDef<'a>),
+    UntaggedUnion(&'a UntaggedUnionDef<'a>),
+    /// A tagged union with a well-defined Rust-compatible layout.
+    /// See RFC #2195 for complete details on how `#[repr(C)]` enums are defined.
+    ///
+    /// There are two different representations for tagged unions.
+    /// See [TaggedUnionStyle] for details.
+    TaggedUnion(&'a TaggedUnionDef<'a>),
+    /// A C-style enum, without any data.
+    ///
+    /// See [TypeInfo::TaggedUnion] for enums *with* data.
+    CStyleEnum(&'a CStyleEnumDef<'a>),
     /// A named, transparent, extern type
     Extern {
         /// The name of the type
@@ -354,7 +512,9 @@ impl<'tp> TypeInfo<'tp> {
             #[cfg(feature = "builtins")]
             Str => size_of::<AsmStr>(),
             Structure(ref def) => def.size,
-            Union(ref def) => def.size,
+            UntaggedUnion(ref def) => def.size,
+            TaggedUnion(def) => def.size,
+            CStyleEnum(def) => def.discriminant.size.bytes(),
             // Provide a dummy value
             TypeInfo::Magic { .. } | TypeInfo::Extern { .. } => 0xFFFF_FFFF
         }
@@ -376,8 +536,10 @@ impl<'tp> TypeInfo<'tp> {
             TypeInfo::Pointer => align_of::<*const ()>(),
             #[cfg(feature = "builtins")]
             TypeInfo::Str => align_of::<AsmStr>(),
-            TypeInfo::Structure(ref def) => def.alignment,
-            TypeInfo::Union(ref def) => def.alignment,
+            TypeInfo::Structure(def) => def.alignment,
+            TypeInfo::UntaggedUnion(def) => def.alignment,
+            TypeInfo::CStyleEnum(def) => def.discriminant.align(),
+            TypeInfo::TaggedUnion(def) => def.alignment
         }
     }
 }
@@ -394,7 +556,9 @@ impl<'a> Display for TypeInfo<'a> {
             TypeInfo::Optional(inner_type) => write!(f, "Option<{}>", inner_type),
             TypeInfo::Pointer => f.write_str("*mut void"),
             TypeInfo::Structure(ref def) => f.write_str(def.name),
-            TypeInfo::Union(ref def) => f.write_str(def.name),
+            TypeInfo::UntaggedUnion(ref def) => f.write_str(def.name),
+            TypeInfo::CStyleEnum(ref def) => f.write_str(def.name),
+            TypeInfo::TaggedUnion(ref def) => f.write_str(def.name),
             TypeInfo::Extern { name } => write!(f, "extern {}", name),
             TypeInfo::Magic { id, extra: None } => write!(f, "magic::{}", id),
             TypeInfo::Magic { id, extra: Some(extra) } => write!(f, "magic::{}<{}>", id, extra)
@@ -451,9 +615,137 @@ impl<'a, T: StaticReflect> FieldDef<'a, T> {
         self.offset
     }
 }
-/// A `UnionDef` which is known at compile-time
+/// The definition of C-style enum
+///
+/// The variants of a C-style enum may not have any data.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct CStyleEnumDef<'tp> {
+    /// The name of the enumeration
+    pub name: &'static str,
+    /// The integer type of the discriminant
+    ///
+    /// This is what determines the enum's runtime size and alignment.
+    pub discriminant: IntType,
+    /// The valid variants of this enum
+    pub variants: &'tp [CStyleEnumVariant]
+}
+impl<'tp> CStyleEnumDef<'tp> {
+    /// Determines whether this enum has any explicit discriminant values,
+    /// overriding the defaults.
+    ///
+    /// If this is `false`, then the value of each variant's discriminant
+    /// is implicitly equal to its index
+    #[inline]
+    pub fn has_explicit_discriminants(&self) -> bool {
+        self.variants.iter().any(|variant| variant.discriminant.is_explicit())
+    }
+}
+/// A variant in a C-style enum (a Rust enum without any data)
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct CStyleEnumVariant {
+    /// The index of this variant, specifying the declaration order
+    pub index: usize,
+    /// The name of this variant
+    pub name: &'static str,
+    /// The value of the enum's discriminant
+    pub discriminant: DiscriminantValue
+}
+/// The value of the discriminant
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub struct UnionDef<'a> {
+pub enum DiscriminantValue {
+    /// The discriminant has the default value,
+    /// which is implicitly equal to its declaration order.
+    Default {
+        /// The index
+        declaration_index: usize
+    },
+    /// This discriminant hasn't been explicitly specified,
+    ///
+    /// However, a previous discriminant *has* been explicitly specified,
+    /// and is implicitly offsetting future values.
+    ImplicitlyOffset {
+        /// The raw bits of the discriminant,
+        /// appropriately offset by previous declarations
+        bits: u64,
+    },
+    /// The discriminant has been specified explicitly
+    ///
+    /// This
+    ExplicitInteger {
+        /// The raw bits of the explicit discriminant's value.
+        ///
+        /// It is possible that this is a negative value, depending on the [IntType] of the discriminant.
+        bits: u64
+    },
+}
+impl DiscriminantValue {
+    /// Whether this discriminant has been specified explicitly
+    #[inline]
+    pub fn is_explicit(&self) -> bool {
+        matches!(*self, DiscriminantValue::ExplicitInteger { .. })
+    }
+    /// The bits of the discriminant.
+    ///
+    /// Depending on the [IntType] of the discriminant,
+    /// it is possible this is a negative value (even though the static type is `u64`)
+    #[inline]
+    pub fn bits(&self) -> u64 {
+        match *self {
+            DiscriminantValue::Default { declaration_index } => declaration_index as u64,
+            DiscriminantValue::ImplicitlyOffset { bits } |
+            DiscriminantValue::ExplicitInteger { bits } => bits
+        }
+    }
+}
+/// The definition of a FFI-compatible enum with data.
+///
+/// These are just FFI-compatible Rust enums annotated with `#[repr(C)]`.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct TaggedUnionDef<'tp> {
+    /// The name of the enum type
+    pub name: &'tp str,
+    /// The "style" of the tagged union.
+    ///
+    /// Tagged unions have two possible representations.
+    /// See [TaggedUnionStyle] docs for more info.
+    pub style: TaggedUnionStyle,
+    /// The type of the enum's discriminant
+    pub discriminant_type: IntType,
+    /// The variants of this tagged enum
+    pub variants: &'tp [TaggedUnionVariant<'tp>],
+    /// The size of the type
+    pub size: usize,
+    /// The alignment of the type
+    ///
+    /// This should be equal to max(discriminant.align, max(variant.align for variant in variants))
+    pub alignment: usize
+}
+
+/// A variant in a tagged union (Rust-style enum)
+///
+/// This mostly functions as a wrapper around a [StructureDef],
+/// which stores information on the variant's fields (and whether or
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct TaggedUnionVariant<'tp> {
+    /// The index of this variant, determining the declaration order
+    pub index: usize,
+    /// The structure this enum-variant is equivalent to.
+    ///
+    /// It has a matching name, fields, and size.
+    pub equivalent_structure: StructureDef<'tp>,
+    /// The value of the enum's discriminant
+    pub discriminant: DiscriminantValue
+}
+impl<'tp> TaggedUnionVariant<'tp> {
+    /// The name of the variant
+    #[inline]
+    pub const fn name(&self) -> &'tp str {
+        self.equivalent_structure.name
+    }
+}
+/// The definition of an untagged union which is known at compile-time
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub struct UntaggedUnionDef<'a> {
     /// The name of the union
     pub name: &'a str,
     /// The fields of the union
