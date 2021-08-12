@@ -6,7 +6,7 @@
 use pretty_assertions::assert_eq;
 
 use static_reflect::{field_offset, StaticReflect, FieldReflect};
-use static_reflect::types::{TypeInfo, FieldDef, StructureDef, UntaggedUnionDef, UnionFieldDef, TypeId};
+use static_reflect::types::{TypeInfo, FieldDef, StructureDef, UntaggedUnionDef, UnionFieldDef, TypeId, CStyleEnumVariant, CStyleEnumDef, DiscriminantValue, IntType};
 use std::mem::{size_of, align_of};
 
 use static_reflect_derive::{StaticReflect};
@@ -206,6 +206,64 @@ fn test_tuple_struct() {
             alignment: align_of::<SimpleTupleStruct>(),
         })
     );
+}
+
+#[derive(StaticReflect)]
+#[repr(C)]
+enum SimpleEnum {
+    Zero,
+    Two = 2,
+    Eight = 8,
+    Four = 4,
+    Implicit
+}
+
+#[test] // Currently fails because of #2
+fn test_simple_enum(){
+    assert_eq!(
+        SimpleEnum::TYPE_INFO,
+        TypeInfo::CStyleEnum(&CStyleEnumDef {
+            name: "SimpleEnum",
+            discriminant: IntType::ISIZE,
+            variants: &[
+                CStyleEnumVariant {
+                    index: 0,
+                    name: "Zero",
+                    discriminant: DiscriminantValue::Default {
+                        declaration_index: 0,
+                    },
+                },
+                CStyleEnumVariant {
+                    index: 1,
+                    name: "Two",
+                    discriminant: DiscriminantValue::ExplicitInteger {
+                        bits: 2,
+                    },
+                },
+                CStyleEnumVariant {
+                    index: 2,
+                    name: "Eight",
+                    discriminant: DiscriminantValue::ExplicitInteger {
+                        bits: 8,
+                    },
+                },
+                CStyleEnumVariant {
+                    index: 3,
+                    name: "Four",
+                    discriminant: DiscriminantValue::ExplicitInteger {
+                        bits: 4,
+                    },
+                },
+                CStyleEnumVariant {
+                    index: 4,
+                    name: "Implciit",
+                    discriminant: DiscriminantValue::ImplicitlyOffset {
+                        bits: 5,
+                    },
+                }
+            ]
+        })
+    )
 }
 
 #[derive(StaticReflect)]

@@ -4,7 +4,7 @@ use proc_macro2::{TokenStream, Ident, Span};
 use syn::parse::{self, Parse, ParseStream};
 use syn::spanned::Spanned;
 use indexmap::IndexMap;
-use crate::has_repr_c;
+use crate::{determine_repr, Repr};
 
 #[derive(Debug)]
 #[non_exhaustive]
@@ -95,7 +95,8 @@ impl Parse for DeriveFieldOptions {
 
 pub fn derive_static_reflect(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
     let name = &input.ident;
-    if !has_repr_c(&input) {
+    let repr = determine_repr(&input)?;
+    if repr != Some(Repr::C) && !matches!(input.data, Data::Enum(_)) {
         return Err(syn::Error::new(
             name.span(),
             "StaticReflect requires repr(C)"
@@ -117,7 +118,7 @@ pub fn derive_static_reflect(input: &DeriveInput) -> Result<TokenStream, syn::Er
                 &mut extra_defs
             )?
         },
-        Data::Enum(ref data) => enum_static_type(data, &name)?,
+        Data::Enum(ref data) => enum_static_type(data, repr, &name)?,
         Data::Union(ref data) => {
             handle_type(
                 UnionTypeHandler { data, name },
@@ -256,12 +257,28 @@ fn is_c_style_enum(data: &DataEnum) -> bool {
      */
     data.variants.iter().all(|var| var.fields.is_empty())
 }
-fn enum_static_type(data: &DataEnum, name: &Ident) -> Result<TokenStream, syn::Error> {
+fn enum_static_type(data: &DataEnum, repr: Option<Repr>, name: &Ident) -> Result<TokenStream, syn::Error> {
+    let size = quote!(std::mem::size_of::<#name>());
+    let equivalent_integer = match repr {
+        Some(Repr::C) => {
+            // Determine the equivalent unsigned integer representation
+            quote!(static_reflect::types::IntType {
+                size: static_reflect::types::IntSize::unwrap_from_bytes(#size),
+                signed: false
+            })
+        },
+        Some(Repr::Integer { bits, signed }) => {
+            quote!(static_reflect::types::IntType {
+                size: static_reflect::types::IntSize::unwrap_from_bytes(#bits as usize / 8),
+                signed: #signed
+            })
+        },
+        _ => return Err(syn::Error::new(name.span(), "Enum types must be either #[repr(C)] or #[repr(Int)]")),
+    };
     if is_c_style_enum(data) {
         // C-style enum
         // TODO: Strict typing
-        // TODO: Should we always assume that we're unsigned?
-        Ok(quote!(static_reflect::types::TypeInfo::integer(std::mem::size_of::<#name>(), false)))
+        Ok(quote!(static_reflect::types::TypeInfo::Integer(#equivalent_integer)))
     } else {
         Err(syn::Error::new(
             Span::call_site(),
