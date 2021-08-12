@@ -4,7 +4,8 @@ use proc_macro2::{TokenStream, Ident, Span};
 use syn::parse::{self, Parse, ParseStream};
 use syn::spanned::Spanned;
 use indexmap::IndexMap;
-use crate::{determine_repr, Repr};
+
+use super::{determine_repr, Repr};
 
 #[derive(Debug)]
 #[non_exhaustive]
@@ -144,7 +145,7 @@ pub fn derive_static_reflect(input: &DeriveInput) -> Result<TokenStream, syn::Er
             };
         }
     };
-    crate::utils::debug_derive("StaticReflect", &input.ident, &r);
+    super::utils::debug_derive("StaticReflect", &input.ident, &r);
     Ok(r)
 }
 fn handle_type<'a, T: TypeHandler<'a>>(

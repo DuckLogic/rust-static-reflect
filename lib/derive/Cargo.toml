@@ -11,13 +11,14 @@ repository = "https://github.com/DuckLogic/rust-static-reflect"
 proc-macro = true
 
 [dependencies]
-proc-macro2 = "^1"
-syn = "1"
+proc-macro2 = "1"
+itertools = "0.10.0"
+quote = "1"
+indexmap = "1.6"
 
-# Actual implementation
-[dependencies.static-reflect-derive-internals]
-version = "0.2.0-alpha.1"
-path = "../derive-internals"
+[dependencies.syn]
+version = "1"
+features = ["full", "extra-traits"]
 
 [dev-dependencies]
 # Testing

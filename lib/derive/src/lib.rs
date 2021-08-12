@@ -1,5 +1,6 @@
 extern crate proc_macro;
-extern crate static_reflect_derive_internals as internals;
+
+mod internals;
 
 use syn::{parse_macro_input, Item, DeriveInput};
 

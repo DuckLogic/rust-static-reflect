@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use syn::{DeriveInput, Meta, NestedMeta, Item, spanned::Spanned};
 use proc_macro2::{TokenStream};
-use crate::func::FuncArgs;
+use self::func::FuncArgs;
 
 pub mod func;
 pub mod fields;
@@ -50,7 +50,7 @@ pub fn determine_repr(input: &DeriveInput) -> Result<Option<Repr>, syn::Error> {
 pub fn derive_reflect_func(args: FuncArgs, input: &Item) -> Result<TokenStream, ::syn::Error> {
     let result = self::func::handle_item(&input, args)?;
 
-    crate::utils::debug_proc_macro("reflect_func", &crate::utils::item_name(input), &result);
+    self::utils::debug_proc_macro("reflect_func", &self::utils::item_name(input), &result);
 
     Ok(result)
 }

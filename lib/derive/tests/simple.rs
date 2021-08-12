@@ -210,6 +210,7 @@ fn test_tuple_struct() {
 
 #[derive(StaticReflect)]
 #[repr(C)]
+#[allow(dead_code)]
 enum SimpleEnum {
     Zero,
     Two = 2,
