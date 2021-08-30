@@ -1,31 +1,33 @@
 //! Reflection information on function declarations
-use crate::types::{TypeInfo};
+use educe::Educe;
+use crate::{refs::{StaticAlloc, TypeAlloc}, types::{TypeInfo}};
 use std::marker::PhantomData;
 
 /// The declaration of a function whose information
 /// is known to the static reflection system
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct FunctionDeclaration<'a, R = (), Args = ()> {
+#[derive(Educe)]
+#[educe(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct FunctionDeclaration<R = (), Args = (), A: TypeAlloc = StaticAlloc> {
     /// The name of the function, as declared in the
     /// source code.
-    pub name: &'a str,
+    pub name: A::String,
     /// If the function is unsafe
     pub is_unsafe: bool,
     /// The location of the function (if known)
     ///
     /// Not all supported functions have a known location.
-    pub location: Option<FunctionLocation>,
+    pub location: Option<FunctionLocation<A>>,
     /// The signature of the function, including
     /// its arguments and return types
     ///
     /// Unlike the [PhantomData], this is actually retained at runtime.
-    pub signature: SignatureDef<'a>,
+    pub signature: SignatureDef<A>,
     /// PhantomData: The return type of the function 
     pub return_type: PhantomData<fn() -> R>,
     /// PhantomData: The argument types of the function
     pub arg_types: PhantomData<fn(Args) -> ()>,
 }
-impl<'a, R, Args> FunctionDeclaration<'a, R, Args> {
+impl<R, Args, A: TypeAlloc> FunctionDeclaration<R, Args, A> {
     /// If the function has a known location at runtime
     ///
     /// If this is false, it wont actually be possible
@@ -37,19 +39,20 @@ impl<'a, R, Args> FunctionDeclaration<'a, R, Args> {
     }
     /// Erase all statically known type information
     #[inline]
-    pub fn erase(&'a self) -> &'a FunctionDeclaration<(), ()> {
-        unsafe { &*(self as *const Self as *const FunctionDeclaration<(), ()>) }
+    pub fn erase(&self) -> &'_ FunctionDeclaration<(), (), A> {
+        unsafe { &*(self as *const Self as *const FunctionDeclaration<(), (), A>) }
     }
 }
 /// The definition of a function's signature
 ///
 /// Includes its argument types, return type, and calling convention.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct SignatureDef<'tp> {
+#[derive(Educe)]
+#[educe(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct SignatureDef<A: TypeAlloc = StaticAlloc> {
     /// A list of argument types to the function
-    pub argument_types: &'tp [TypeInfo<'tp>],
+    pub argument_types: A::InfoRefArray,
     /// The return type of the function
-    pub return_type: &'tp TypeInfo<'tp>,
+    pub return_type: A::InfoRef,
     /// The calling convention
     pub calling_convention: CallingConvention
 }
@@ -76,14 +79,15 @@ impl Default for CallingConvention {
 /// The location of the function
 ///
 /// Gives specific information on which function to invoke
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum FunctionLocation {
+#[derive(Educe)]
+#[educe(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum FunctionLocation<A: TypeAlloc = StaticAlloc> {
     /// The function is in a dynamically linked library,
     /// which will need to be resolved by the linker
     DynamicallyLinked {
         /// The name to be linked against,
         /// or `None` if it's the same as the function's name
-        link_name: Option<&'static str>
+        link_name: Option<A::String>
     },
     /// The function is referred to by an absolute (hardcoded) address
     AbsoluteAddress(*const ()),

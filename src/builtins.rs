@@ -2,8 +2,8 @@
 //!
 //! These are mostly FFI-safe alternatives to the standard library
 //! types.
-use std::mem::MaybeUninit;
-use crate::{StaticReflect, field_offset, TypeInfo};
+use std::{any::TypeId, mem::MaybeUninit};
+use crate::{StaticReflect, TypeInfo, field_offset, refs::TypeAlloc};
 
 #[cfg(feature = "gc")]
 use zerogc_derive::Trace;
@@ -47,7 +47,7 @@ impl<'a, T: 'a> From<&'a [T]> for AsmSlice<T> {
     }
 }
 unsafe impl<T: StaticReflect> StaticReflect for AsmSlice<T> {
-    const TYPE_INFO: TypeInfo<'static> = TypeInfo::Slice {
+    const TYPE_INFO: TypeInfo = TypeInfo::Slice {
         element_type: &T::TYPE_INFO
     };
 }
@@ -91,7 +91,7 @@ impl AsmStr {
     }
 }
 unsafe impl StaticReflect for AsmStr {
-    const TYPE_INFO: TypeInfo<'static> = TypeInfo::Str;
+    const TYPE_INFO: TypeInfo = TypeInfo::Str;
 }
 impl<'a> From<&'a str> for AsmStr {
     fn from(s: &'a str) -> AsmStr {
@@ -133,7 +133,7 @@ impl AsmOption<()> {
     ///
     /// This should be equal to the type's alignment
     #[inline]
-    pub const fn value_field_offset(element_type: &TypeInfo<'_>) -> usize {
+    pub const fn value_field_offset<A: TypeAlloc>(element_type: &TypeInfo<A>) -> usize {
         element_type.alignment()
     }
 }
@@ -185,7 +185,7 @@ impl<T> From<Option<T>> for AsmOption<T> {
     }
 }
 unsafe impl<T: StaticReflect> StaticReflect for AsmOption<T> {
-    const TYPE_INFO: TypeInfo<'static> = TypeInfo::Optional(&T::TYPE_INFO);
+    const TYPE_INFO: TypeInfo = TypeInfo::Optional(&T::TYPE_INFO);
 }
 
 /// This is an owned value, so it's safe to send

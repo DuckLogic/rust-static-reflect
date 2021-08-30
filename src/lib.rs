@@ -27,6 +27,7 @@ mod macros;
 pub mod builtins;
 pub mod types;
 pub mod funcs;
+pub mod refs;
 
 mod core;
 
@@ -58,7 +59,7 @@ use std::ops::{Sub, Mul, Add};
 /// form of FFI safety.
 pub unsafe trait StaticReflect {
     /// The static information about the type's representation
-    const TYPE_INFO: TypeInfo<'static>;
+    const TYPE_INFO: TypeInfo;
 }
 
 /// A primitive integer type

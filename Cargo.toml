@@ -8,9 +8,12 @@ repository = "https://github.com/DuckLogic/rust-static-reflect"
 readme = "README.md"
 
 [dependencies]
+educe = "0.4"
 # Optional: Support for zerogc
 zerogc = { version = "0.2.0-alpha.4", optional = true }
 zerogc-derive = { version = "0.2.0-alpha.4", optional = true }
+# Optional: Support for serde
+serde = { version = "1", optional = true, features = ["derive"] }
 
 [features]
 default = ["never", "builtins"]
