@@ -7,7 +7,7 @@ macro_rules! define_extern_type {
     ($target:ty => $defined_path:path) => {
         unsafe impl $crate::StaticReflect for $target {
             const TYPE_INFO: $crate::TypeInfo<'static> = $crate::TypeInfo::Extern {
-                name: stringify!($defined_path)
+                name: zerogc::epsilon::gc_str(stringify!($defined_path))
             };
         }
     };
