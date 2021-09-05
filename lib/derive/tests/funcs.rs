@@ -1,5 +1,6 @@
 use std::os::raw::c_void;
 
+use zerogc::epsilon::{gc, gc_str, gc_array};
 use static_reflect_derive::reflect_func;
 use static_reflect::StaticReflect;
 use static_reflect::funcs::{FunctionDeclaration, FunctionLocation, SignatureDef};
@@ -45,12 +46,12 @@ fn extern_block() {
     assert_eq!(
         _FUNC_malloc,
         FunctionDeclaration::<*mut c_void, (usize,)> {
-            name: "malloc",
+            name: gc_str("malloc"),
             is_unsafe: true, // Foreign functions are always unsafe (in spite of lack of keyword)
             location: Some(FunctionLocation::DynamicallyLinked { link_name: None }),
             signature: SignatureDef {
-                argument_types: &[usize::TYPE_INFO],
-                return_type: &TypeInfo::Pointer,
+                argument_types: gc_array(&[usize::TYPE_INFO]),
+                return_type: TypeInfo::Pointer,
                 calling_convention: Default::default()
             },
             return_type: PhantomData,
@@ -60,12 +61,12 @@ fn extern_block() {
     assert_eq!(
         _FUNC_sqrt,
         FunctionDeclaration::<f32, (f32,)> {
-            name: "sqrt",
+            name: gc_str("sqrt"),
             is_unsafe: true, // NOTE: Foreign function
-            location: Some(FunctionLocation::DynamicallyLinked { link_name: Some("sqrtf".into()) }),
+            location: Some(FunctionLocation::DynamicallyLinked { link_name: Some(gc_str("sqrtf")) }),
             signature: SignatureDef {
-                argument_types: &[f32::TYPE_INFO],
-                return_type: &f32::TYPE_INFO,
+                argument_types: gc_array(&[f32::TYPE_INFO]),
+                return_type: f32::TYPE_INFO,
                 calling_convention: Default::default()
             },
             return_type: PhantomData,
@@ -81,12 +82,12 @@ fn rust_funcs() {
     assert_eq!(
         _FUNC_dynamically_linked,
         FunctionDeclaration::<f32, (u32, *mut String)> {
-            name: "dynamically_linked",
+            name: gc_str("dynamically_linked"),
             is_unsafe: true,
             location: Some(FunctionLocation::DynamicallyLinked { link_name: None }),
             signature: SignatureDef {
-                argument_types: &[u32::TYPE_INFO, TypeInfo::Pointer],
-                return_type: &TypeInfo::F32,
+                argument_types: gc_array(&[u32::TYPE_INFO, TypeInfo::Pointer]),
+                return_type: TypeInfo::F32,
                 calling_convention: Default::default()
             },
             return_type: PhantomData,
@@ -96,12 +97,12 @@ fn rust_funcs() {
     assert_eq!(
         _FUNC_stupid_name,
         FunctionDeclaration::<(), (f32, f32)> {
-            name: "stupid_name",
+            name: gc_str("stupid_name"),
             is_unsafe: false,
-            location: Some(FunctionLocation::DynamicallyLinked { link_name: Some("better_name".into()) }),
+            location: Some(FunctionLocation::DynamicallyLinked { link_name: Some(gc_str("better_name")) }),
             signature: SignatureDef {
-                argument_types: &[f32::TYPE_INFO, TypeInfo::Float { size: FloatSize::Single }],
-                return_type: &TypeInfo::Unit,
+                argument_types: gc_array(&[f32::TYPE_INFO, TypeInfo::Float { size: FloatSize::Single }]),
+                return_type: TypeInfo::Unit,
                 calling_convention: Default::default()
             },
             return_type: PhantomData,
@@ -111,12 +112,12 @@ fn rust_funcs() {
     assert_eq!(
         _FUNC_absolute_address_example,
         FunctionDeclaration::<f64, (f64, f64)> {
-            name: "absolute_address_example",
+            name: gc_str("absolute_address_example"),
             is_unsafe: false,
             location: Some(FunctionLocation::AbsoluteAddress(absolute_address_example as *const ())),
             signature: SignatureDef {
-                argument_types: &[f64::TYPE_INFO, f64::TYPE_INFO],
-                return_type: &f64::TYPE_INFO,
+                argument_types: gc_array(&[f64::TYPE_INFO, f64::TYPE_INFO]),
+                return_type: f64::TYPE_INFO,
                 calling_convention: Default::default()
             },
             return_type: PhantomData,

@@ -124,7 +124,7 @@ fn handle_fn_def(item: &ItemFn, args: FuncArgs) -> Result<TokenStream, syn::Erro
     } else {
         let name = determine_fn_link_name(&item)?;
         FunctionLocation::DynamicallyLinked {
-            link_name: name.map(|s| quote!(#s))
+            link_name: name.map(|s| quote!(zerogc::epsilon::gc_str(#s)))
         }
     };
     let def = emit_def_from_signature(&item.sig, FunctionDefOpts {
@@ -177,7 +177,7 @@ fn handle_foreign_mod(item: &ItemForeignMod, default_args: FuncArgs) -> Result<T
                     }
                 }
                 let link_name = determine_foreign_link_name(&item.attrs)?
-                    .map(|s| quote!(#s));
+                    .map(|s| quote!(zerogc::epsilon::gc_str(#s)));
                 let args = FunctionDefOpts {
                     location: FunctionLocation::DynamicallyLinked { link_name },
                     assume_c_abi: true,
@@ -233,9 +233,9 @@ fn emit_def_from_signature(
         }
     }
     let return_type = match item.output {
-        ReturnType::Default => quote!(&static_reflect::types::TypeInfo::Unit),
+        ReturnType::Default => quote!(static_reflect::types::TypeInfo::Unit),
         ReturnType::Type(_, ref ty) => {
-            quote!(&<#ty as static_reflect::StaticReflect>::TYPE_INFO)
+            quote!(<#ty as static_reflect::StaticReflect>::TYPE_INFO)
         },
     };
     let signature = StaticSignatureDef { argument_types, return_type };
@@ -319,7 +319,7 @@ impl ToTokens for StaticFunctionDef {
             static_arg_types: ref staitc_arg_types
         } = *self;
         tokens.append_all(quote!(static_reflect::funcs::FunctionDeclaration::<'static, #static_return_type, #staitc_arg_types> {
-            name: #name,
+            name: zerogc::epsilon::gc_str(#name),
             is_unsafe: #is_unsafe,
             signature: #signature,
             location: #location,
@@ -352,7 +352,7 @@ impl ToTokens for StaticSignatureDef {
             ref return_type
         } = *self;
         tokens.append_all(quote!(static_reflect::funcs::SignatureDef {
-            argument_types: &[#(#argument_types),*],
+            argument_types: zerogc::epsilon::gc_array(&[#(#argument_types),*]),
             return_type: #return_type,
             // We use C FFI
             calling_convention: static_reflect::funcs::CallingConvention::StandardC

@@ -355,7 +355,7 @@ impl<'a> TypeHandler<'a> for StructHandler<'a> {
     }
 
     fn def_into_type(def_ref: TokenStream) -> TokenStream {
-        quote!(static_reflect::types::TypeInfo::Structure(#def_ref))
+        quote!(static_reflect::types::TypeInfo::Structure(zerogc::epsilon::gc(#def_ref)))
     }
 
     fn handle_fields<F: FnMut(FieldInfo<'a>)>(&mut self, mut handler: F) -> syn::Result<()> {
@@ -411,7 +411,7 @@ impl<'a> TypeHandler<'a> for StructHandler<'a> {
             });
             let name_field_value = match field_name {
                 FieldName::Tuple { .. } => quote!(None),
-                FieldName::Named { name } => quote!(Some(stringify!(#name)))
+                FieldName::Named { name } => quote!(Some(zerogc::epsilon::gc_str(stringify!(#name))))
             };
             let static_def = quote!(::static_reflect::types::FieldDef {
                 name: #name_field_value,
@@ -436,8 +436,8 @@ impl<'a> TypeHandler<'a> for StructHandler<'a> {
             use std::mem::{size_of, align_of};
             #header
             let def = StructureDef {
-                name: stringify!(#name),
-                fields: _FIELDS,
+                name: zerogc::epsilon::gc_str(stringify!(#name)),
+                fields: zerogc::epsilon::gc_array(_FIELDS),
                 size: size_of::<#name>(),
                 alignment: align_of::<#name>(),
             };
@@ -448,8 +448,9 @@ impl<'a> TypeHandler<'a> for StructHandler<'a> {
             {
                 // NOTE: Can't use for-loop since iterators aren't const
                 let mut index = 0;
-                while index < def.fields.len() {
-                    let alignment = def.fields[index].value_type.type_ref().alignment();
+                let fields = _FIELDS;
+                while index < fields.len() {
+                    let alignment = fields[index].value_type.type_ref().value().alignment();
                     if alignment > expected_alignment {
                         expected_alignment = alignment;
                     }
@@ -487,7 +488,7 @@ impl<'a> TypeHandler<'a> for UnionTypeHandler<'a> {
     }
 
     fn def_into_type(def_ref: TokenStream) -> TokenStream {
-        quote!(static_reflect::types::TypeInfo::UntaggedUnion(#def_ref))
+        quote!(static_reflect::types::TypeInfo::UntaggedUnion(zerogc::epsilon::gc(#def_ref)))
     }
 
     fn handle_fields<F: FnMut(FieldInfo<'a>)>(&mut self, mut handler: F) -> syn::Result<()> {
@@ -512,7 +513,7 @@ impl<'a> TypeHandler<'a> for UnionTypeHandler<'a> {
                 field_type = assumed_type;
             }
             let static_def = quote!(::static_reflect::types::UnionFieldDef {
-                name: stringify!(#field_name),
+                name: zerogc::epsilon::gc_str(stringify!(#field_name)),
                 value_type: ::static_reflect::types::TypeId::<#field_type>::get(),
                 index: #index
             });
@@ -531,8 +532,8 @@ impl<'a> TypeHandler<'a> for UnionTypeHandler<'a> {
             use std::mem::{size_of, align_of};
             #header
             let def = UntaggedUnionDef {
-                name: stringify!(#name),
-                fields: _FIELDS,
+                name: zerogc::epsilon::gc_str(stringify!(#name)),
+                fields: zerogc::epsilon::gc_array(_FIELDS),
                 size: size_of::<#name>(),
                 alignment: align_of::<#name>(),
             };
@@ -542,9 +543,9 @@ impl<'a> TypeHandler<'a> for UnionTypeHandler<'a> {
             {
                 // NOTE: Can't use for-loop since iterators aren't const
                 let mut index = 0;
-                while index < def.fields.len() {
-                    let alignment = def.fields[index].value_type.type_ref().alignment();
-                    let size = def.fields[index].value_type.type_ref().size();
+                while index < _FIELDS.len() {
+                    let alignment = _FIELDS[index].value_type.type_ref().value().alignment();
+                    let size = _FIELDS[index].value_type.type_ref().value().size();
                     if alignment > expected_alignment {
                         expected_alignment = alignment;
                     }

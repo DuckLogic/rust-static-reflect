@@ -24,3 +24,8 @@ features = ["full", "extra-traits"]
 # Testing
 static-reflect = { version = "0.2.0-alpha.2", path = "../.." }
 pretty_assertions = "0.7.2"
+
+[dev-dependencies.zerogc]
+version = "0.2.0-alpha.5"
+git = "https://github.com/DuckLogic/zerogc.git"
+branch = "master"
