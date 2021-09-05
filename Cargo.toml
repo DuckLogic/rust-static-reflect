@@ -9,11 +9,19 @@ readme = "README.md"
 
 [dependencies]
 educe = "0.4"
-# Optional: Support for zerogc
-zerogc = { version = "0.2.0-alpha.4", optional = true }
-zerogc-derive = { version = "0.2.0-alpha.4", optional = true }
 # Optional: Support for serde
 serde = { version = "1", optional = true, features = ["derive"] }
+
+[dependencies.zerogc]
+version = "0.2.0-alpha.5"
+git = "https://github.com/DuckLogic/zerogc.git"
+branch = "master"
+features = ["epsilon"]
+
+[dependencies.zerogc-derive]
+version = "0.2.0-alpha.5"
+git = "https://github.com/DuckLogic/zerogc.git"
+branch = "master"
 
 [features]
 default = ["never", "builtins"]
@@ -21,8 +29,7 @@ default = ["never", "builtins"]
 never = []
 # Support the 'builtin' alternative to stdlib types
 builtins = []
-# Support for garbage collection
-gc = ["zerogc", "zerogc-derive"]
+serde1 = ["serde", "zerogc/serde1"]
 
 
 [workspace]

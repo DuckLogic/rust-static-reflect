@@ -19,6 +19,7 @@
     const_raw_ptr_deref,
     const_maybe_uninit_as_ptr,
     const_ptr_offset_from,
+    const_trait_impl
 )]
 #![cfg_attr(feature = "never", feature(never_type))]
 
@@ -27,7 +28,6 @@ mod macros;
 pub mod builtins;
 pub mod types;
 pub mod funcs;
-pub mod refs;
 
 mod core;
 
@@ -59,7 +59,7 @@ use std::ops::{Sub, Mul, Add};
 /// form of FFI safety.
 pub unsafe trait StaticReflect {
     /// The static information about the type's representation
-    const TYPE_INFO: TypeInfo;
+    const TYPE_INFO: TypeInfo<'static>;
 }
 
 /// A primitive integer type

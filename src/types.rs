@@ -1,47 +1,29 @@
 //! The static type system
-use crate::refs::{StaticAlloc, TypeRef, TypeAlloc};
-use crate::{StaticReflect, FieldReflect, PrimInt, PrimFloat};
-
-use educe::Educe;
-
-#[cfg(feature = "num")]
-pub use self::num::{PrimNum, PrimValue};
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 use std::fmt::{self, Formatter, Display, Debug, Write};
+use std::alloc::Layout;
 
-#[cfg(feature = "gc")]
-use zerogc_derive::{unsafe_gc_impl};
 
+#[cfg(feature = "num")]
+pub use self::num::{PrimNum, PrimValue};
+
+use educe::Educe;
+
+use zerogc::{Gc, CollectorId};
+use zerogc::array::{GcArray, GcString};
+use zerogc::epsilon::{self, EpsilonCollectorId};
+use zerogc_derive::{Trace, NullTrace};
+
+use crate::{StaticReflect, FieldReflect, PrimInt, PrimFloat};
 #[cfg(feature = "builtins")]
 use crate::builtins::{AsmSlice, AsmStr};
-use std::alloc::Layout;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-
 #[cfg(feature = "serde")]
-pub mod serialize;
+use zerogc_derive::GcDeserialize;
 
-/// An arena-allocator for [TypeInfo]
-pub trait TypeAllocContext {
-    /// Allocate a copy of the specified slice
-    #[inline]
-    fn alloc_str(&self, orig: &str) -> &'_ str {
-        unsafe {
-            std::str::from_utf8_unchecked(
-                self.alloc_slice_copy(orig.as_bytes())
-            )
-        }
-    }
-    /// Allocate the specified value
-    fn alloc<T>(&self,val: T) -> &'_ T;
-    /// Allocate a copy of the specified slice
-    fn alloc_slice_copy<T: Copy>(&self, orig: &[T]) -> &'_ [T];
-    /// Allocate a slice of the specified values
-    ///
-    /// May need intermediate allocations.
-    fn alloc_slice_iter<T>(&self, orig: impl IntoIterator<Item=T>) -> &'_ [T];
-}
 
 /// A type which is never zero, and where optional types
 /// are guaranteed to use the null-pointer representation
@@ -55,7 +37,7 @@ pub unsafe trait SimpleNonZeroRepr: StaticReflect {}
 /// they are not necessarily compatible.
 /// For example, the C standard technically allows 16-bit ints
 /// or 32-bit longs.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[derive(NullTrace, Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[repr(u8)]
 pub enum IntSize {
@@ -152,7 +134,9 @@ impl std::error::Error for InvalidSizeErr {}
 
 /// The size of a floating point number,
 /// either single-precision or double-precision
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[derive(NullTrace, Clone, Copy, Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize, GcDeserialize))]
+#[cfg_attr(feature = "serde", zerogc(serde(delegate)))]
 pub enum FloatSize {
     /// A single-precision floating point number.
     ///
@@ -194,7 +178,9 @@ impl Default for FloatSize {
 }
 
 /// An integer type
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(NullTrace, Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize, GcDeserialize))]
+#[cfg_attr(feature = "serde", zerogc(serde(delegate)))]
 pub struct IntType {
     /// The size of this integer
     pub size: IntSize,
@@ -343,7 +329,9 @@ impl Display for IntType {
 /// As you can see, there is no need for padding bytes in `EfficientVariantOne`.
 /// The `second` field is naturally aligned, making the whole `EfficientRepr` only `4` bytes,
 /// in contrast to the 5-byte representation of `TraditionalRepr`.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(NullTrace, Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(Deserialize, GcDeserialize, Serialize))]
+#[cfg_attr(feature = "serde", zerogc(serde(delegate)))]
 pub enum TaggedUnionStyle {
     /// The ["traditional" representation](https://doc.rust-lang.org/nightly/reference/type-layout.html#reprc-enums-with-fields),
     /// which is specified by `#[repr(C)]`
@@ -404,11 +392,12 @@ impl Default for TaggedUnionStyle {
 ///
 /// However, they can be allocated at runtime,
 /// and potentially live for a more limited lifetime.
-#[derive(Educe)]
+#[derive(Educe, Trace)]
 #[educe(Debug, Eq, Copy, Clone, PartialEq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "kind", rename_all = "snake_case"))]
-pub enum TypeInfo<A: TypeAlloc = StaticAlloc> {
+#[zerogc(copy, collector_ids(Id))]
+pub enum TypeInfo<'gc, Id: CollectorId = EpsilonCollectorId> {
     /// The zero-length unit type `()`
     ///
     /// Used for functions that return nothing
@@ -426,7 +415,7 @@ pub enum TypeInfo<A: TypeAlloc = StaticAlloc> {
     Bool,
     /// An integer
     Integer(
-        #[cfg_attr(feature = "serde", serde(flatten))]
+        #[cfg_attr(feature = "serde", serde(rename = "i"))]
         IntType
     ),
     /// A floating point number
@@ -443,7 +432,7 @@ pub enum TypeInfo<A: TypeAlloc = StaticAlloc> {
     #[cfg(feature = "builtins")]
     Slice {
         /// The type of the inner element
-        element_type: A::InfoRef,
+        element_type: Gc<'gc, TypeInfo<'gc, Id>, Id>,
     },
     /// A pointer to a UTF8 encoded string and length,
     /// just like Rust's 'str' type
@@ -456,8 +445,8 @@ pub enum TypeInfo<A: TypeAlloc = StaticAlloc> {
     /// This **never** uses the null pointer optimization
     #[cfg(feature = "builtins")]
     Optional(
-        #[cfg_attr(feature = "serde", serde(flatten))]
-        A::InfoRef
+        #[cfg_attr(feature = "serde", serde(rename = "inner"))]
+        Gc<'gc, TypeInfo<'gc, Id>, Id>
     ),
     /// An untyped pointer
     ///
@@ -469,13 +458,13 @@ pub enum TypeInfo<A: TypeAlloc = StaticAlloc> {
     Pointer,
     /// A structure
     Structure(
-        #[cfg_attr(feature = "serde", serde(flatten))]
-        A::StructureDef
+        #[cfg_attr(feature = "serde", serde(rename = "def"))]
+        Gc<'gc, StructureDef<'gc, Id>, Id>
     ),
     /// An untagged union
     UntaggedUnion(
-        #[cfg_attr(feature = "serde", serde(flatten))]
-        A::UntaggedUnionDef
+        #[cfg_attr(feature = "serde", serde(rename = "def"))]
+        Gc<'gc, UntaggedUnionDef<'gc, Id>, Id>
     ),
     /// A tagged union with a well-defined Rust-compatible layout.
     /// See RFC #2195 for complete details on how `#[repr(C)]` enums are defined.
@@ -483,15 +472,15 @@ pub enum TypeInfo<A: TypeAlloc = StaticAlloc> {
     /// There are two different representations for tagged unions.
     /// See [TaggedUnionStyle] for details.
     TaggedUnion(
-        #[cfg_attr(feature = "serde", serde(flatten))]
-        A::TaggedUnionDef
+        #[cfg_attr(feature = "serde", serde(rename = "def"))]
+        Gc<'gc, TaggedUnionDef<'gc, Id>, Id>
     ),
     /// A C-style enum, without any data.
     ///
     /// See [TypeInfo::TaggedUnion] for enums *with* data.
     CStyleEnum(
-        #[cfg_attr(feature = "serde", serde(flatten))]
-        A::CStyleEnumDef
+        #[cfg_attr(feature = "serde", serde(rename = "def"))]
+        Gc<'gc, CStyleEnumDef<'gc, Id>, Id>
     ),
     /// A named, transparent, extern type
     Extern {
@@ -499,7 +488,7 @@ pub enum TypeInfo<A: TypeAlloc = StaticAlloc> {
         ///
         /// Since this is all we have, it's what used
         /// to disambiguate between them.
-        name: A::String
+        name: GcString<'gc, Id>
     },
     /// A 'magic' type, with a user-defined meaning
     ///
@@ -508,42 +497,18 @@ pub enum TypeInfo<A: TypeAlloc = StaticAlloc> {
         /// The id of the magic type,
         /// giving more information about how its implemented
         /// and what it actually means.
-        id: A::String,
-        /// Extra information (if any)
-        extra: Option<A::InfoRef>,
+        id: GcString<'gc, Id>,
+        /// Extra type information (if any)
+        extra: Option<Gc<'gc, TypeInfo<'gc, Id>, Id>>,
     }
 }
-/*
- * HACK: Implement AsmType as `NullTrace`
- *
- * Unfortunately this means the type cannot use
- * garbage collected references.
- */
-#[cfg(feature = "gc")]
-unsafe_gc_impl! {
-    target => TypeInfo<'a>,
-    params => ['a],
-    bounds => {
-        Trace => always,
-        TraceImmutable => always,
-        GcSafe => always,
-        GcRebrand => { where 'a: 'new_gc },
-        GcErase => { where 'a: 'min }
-    },
-    null_trace => always,
-    branded_type => Self,
-    erased_type => Self,
-    NEEDS_TRACE => false,
-    NEEDS_DROP => ::std::mem::needs_drop::<Self>(),
-    visit => |self, visitor| { Ok(()) /* nop */ }
-}
-impl TypeInfo {
+impl<'gc> TypeInfo<'gc> {
     /// A 32-bit, single-precision float
     pub const F32: Self = TypeInfo::Float { size: FloatSize::Single };
     /// A 64-bit, double-precision float
     pub const F64: Self = TypeInfo::Float { size: FloatSize::Double };
 }
-impl<A: TypeAlloc> TypeInfo<A> {
+impl<'gc, Id: CollectorId> TypeInfo<'gc, Id> {
     /// The size of the type, in bytes
     pub const fn size(&self) -> usize {
         use std::mem::size_of;
@@ -562,9 +527,9 @@ impl<A: TypeAlloc> TypeInfo<A> {
             Pointer => size_of::<*const ()>(),
             #[cfg(feature = "builtins")]
             Str => size_of::<AsmStr>(),
-            Structure(ref def) => def.size,
-            UntaggedUnion(ref def) => def.size,
-            TaggedUnion(def) => def.size,
+            Structure(ref def) => def.value().size,
+            UntaggedUnion(ref def) => def.value().size,
+            TaggedUnion(def) => def.value().size,
             CStyleEnum(def) => def.discriminant.size.bytes(),
             // Provide a dummy value
             TypeInfo::Magic { .. } | TypeInfo::Extern { .. } => 0xFFFF_FFFF
@@ -594,7 +559,7 @@ impl<A: TypeAlloc> TypeInfo<A> {
         }
     }
 }
-impl<A: TypeAlloc> Display for TypeInfo<A> {
+impl<'gc, Id: CollectorId> Display for TypeInfo<'gc, Id> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match *self {
             TypeInfo::Unit => f.write_str("()"),
@@ -617,13 +582,15 @@ impl<A: TypeAlloc> Display for TypeInfo<A> {
     }
 }
 /// Static information on the definition of a structure
-#[derive(Educe)]
+#[derive(Educe, Trace)]
+#[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
 #[educe(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub struct StructureDef<A: TypeAlloc = StaticAlloc> {
+#[zerogc(copy, collector_ids(Id))]
+pub struct StructureDef<'gc, Id: CollectorId = EpsilonCollectorId> {
     /// The name of the structure
-    pub name: A::String,
+    pub name: GcString<'gc, Id>,
     /// All of the fields defined in the structure
-    pub fields: A::FieldDefArray,
+    pub fields: GcArray<'gc, FieldDef<'gc, (), Id>, Id>,
     /// The total size of the structure (including padding)
     pub size: usize,
     /// The required alignment of the structure
@@ -631,13 +598,15 @@ pub struct StructureDef<A: TypeAlloc = StaticAlloc> {
 }
 
 /// The definition of a field
-#[derive(Educe)]
+#[derive(Educe, Trace)]
 #[educe(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub struct FieldDef<T: StaticReflect = (), A: TypeAlloc = StaticAlloc> {
+#[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
+#[zerogc(copy, collector_ids(Id), serde(require_simple_alloc))]
+pub struct FieldDef<'gc, T: StaticReflect + 'gc = (), Id: CollectorId = EpsilonCollectorId> {
     /// The name of the field, or `None` if this is a tuple struct
-    pub name: Option<A::String>,
+    pub name: Option<GcString<'gc, Id>>,
     /// The type of the field
-    pub value_type: TypeId<T, A>,
+    pub value_type: TypeId<'gc, T, Id>,
     /// The offset of the field in bytes
     pub offset: usize,
     /// The numeric index of the field
@@ -645,10 +614,10 @@ pub struct FieldDef<T: StaticReflect = (), A: TypeAlloc = StaticAlloc> {
     /// Should correspond to the order of declaration
     pub index: usize
 }
-impl<T: StaticReflect, A: TypeAlloc> FieldDef<T, A> {
+impl<'gc, T: StaticReflect, Id: CollectorId> FieldDef<'gc, T, Id> {
     /// Erase the static type information from this field definition
     #[inline]
-    pub const fn erase(&self) -> FieldDef<(), A> {
+    pub const fn erase(&self) -> FieldDef<'gc, (), Id> {
         FieldDef {
             name: self.name,
             value_type: self.value_type.erase(),
@@ -665,19 +634,21 @@ impl<T: StaticReflect, A: TypeAlloc> FieldDef<T, A> {
 /// The definition of C-style enum
 ///
 /// The variants of a C-style enum may not have any data.
-#[derive(Educe)]
+#[derive(Educe, Trace)]
 #[educe(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct CStyleEnumDef<A: TypeAlloc = StaticAlloc> {
+#[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
+#[zerogc(copy, collector_ids(Id))]
+pub struct CStyleEnumDef<'gc, Id: CollectorId = EpsilonCollectorId> {
     /// The name of the enumeration
-    pub name: A::String,
+    pub name: GcString<'gc, Id>,
     /// The integer type of the discriminant
     ///
     /// This is what determines the enum's runtime size and alignment.
     pub discriminant: IntType,
     /// The valid variants of this enum
-    pub variants: A::CStyleEnumVariantArray
+    pub variants: GcArray<'gc, CStyleEnumVariant<'gc, Id>, Id>
 }
-impl<A: TypeAlloc> CStyleEnumDef<A> {
+impl<'gc, Id: CollectorId> CStyleEnumDef<'gc, Id> {
     /// Determines whether this enum has any explicit discriminant values,
     /// overriding the defaults.
     ///
@@ -689,18 +660,22 @@ impl<A: TypeAlloc> CStyleEnumDef<A> {
     }
 }
 /// A variant in a C-style enum (a Rust enum without any data)
-#[derive(Educe)]
+#[derive(Educe, Trace)]
 #[educe(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct CStyleEnumVariant<A: TypeAlloc = StaticAlloc> {
+#[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
+#[zerogc(copy, collector_ids(Id))]
+pub struct CStyleEnumVariant<'gc, Id: CollectorId = EpsilonCollectorId> {
     /// The index of this variant, specifying the declaration order
     pub index: usize,
     /// The name of this variant
-    pub name: A::String,
+    pub name: GcString<'gc, Id>,
     /// The value of the enum's discriminant
     pub discriminant: DiscriminantValue
 }
 /// The value of the discriminant
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(NullTrace, Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize, GcDeserialize))]
+#[cfg_attr(feature = "serde", zerogc(serde(delegate)))]
 pub enum DiscriminantValue {
     /// The discriminant has the default value,
     /// which is implicitly equal to its declaration order.
@@ -749,11 +724,13 @@ impl DiscriminantValue {
 /// The definition of a FFI-compatible enum with data.
 ///
 /// These are just FFI-compatible Rust enums annotated with `#[repr(C)]`.
-#[derive(Educe)]
+#[derive(Educe, Trace)]
 #[educe(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct TaggedUnionDef<A: TypeAlloc = StaticAlloc> {
+#[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
+#[zerogc(copy, collector_ids(Id))]
+pub struct TaggedUnionDef<'gc, Id: CollectorId = EpsilonCollectorId> {
     /// The name of the enum type
-    pub name: A::String,
+    pub name: GcString<'gc, Id>,
     /// The "style" of the tagged union.
     ///
     /// Tagged unions have two possible representations.
@@ -762,7 +739,7 @@ pub struct TaggedUnionDef<A: TypeAlloc = StaticAlloc> {
     /// The type of the enum's discriminant
     pub discriminant_type: IntType,
     /// The variants of this tagged enum
-    pub variants: A::TaggedUnionVariantArray,
+    pub variants: GcArray<'gc, TaggedUnionVariant<'gc, Id>, Id>,
     /// The size of the type
     pub size: usize,
     /// The alignment of the type
@@ -775,33 +752,37 @@ pub struct TaggedUnionDef<A: TypeAlloc = StaticAlloc> {
 ///
 /// This mostly functions as a wrapper around a [StructureDef],
 /// which stores information on the variant's fields (and whether or
-#[derive(Educe)]
+#[derive(Educe, Trace)]
 #[educe(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct TaggedUnionVariant<A: TypeAlloc = StaticAlloc> {
+#[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
+#[zerogc(copy, collector_ids(Id), serde(require_simple_alloc))]
+pub struct TaggedUnionVariant<'gc, Id: CollectorId = EpsilonCollectorId> {
     /// The index of this variant, determining the declaration order
     pub index: usize,
     /// The structure this enum-variant is equivalent to.
     ///
     /// It has a matching name, fields, and size.
-    pub equivalent_structure: StructureDef<A>,
+    pub equivalent_structure: StructureDef<'gc, Id>,
     /// The value of the enum's discriminant
     pub discriminant: DiscriminantValue
 }
-impl<A: TypeAlloc> TaggedUnionVariant<A> {
+impl<'gc, Id: CollectorId> TaggedUnionVariant<'gc, Id> {
     /// The name of the variant
     #[inline]
-    pub const fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         &*self.equivalent_structure.name
     }
 }
 /// The definition of an untagged union which is known at compile-time
-#[derive(Educe)]
+#[derive(Educe, Trace)]
 #[educe(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub struct UntaggedUnionDef<A: TypeAlloc = StaticAlloc> {
+#[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
+#[zerogc(copy, collector_ids(Id))]
+pub struct UntaggedUnionDef<'gc, Id: CollectorId = EpsilonCollectorId> {
     /// The name of the union
-    pub name: A::String,
+    pub name: GcString<'gc, Id>,
     /// The fields of the union
-    pub fields: A::UnionFieldDefArray,
+    pub fields: GcArray<'gc, UnionFieldDef<'gc, (), Id>, Id>,
     /// The size of the union, in bytes
     ///
     /// Should equal the size of its largest member
@@ -814,22 +795,24 @@ pub struct UntaggedUnionDef<A: TypeAlloc = StaticAlloc> {
 }
 
 /// A field of a union which is known at compile-time
-#[derive(Educe)]
+#[derive(Educe, Trace)]
 #[educe(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub struct UnionFieldDef<T: StaticReflect = (), A: TypeAlloc = StaticAlloc> {
+#[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
+#[zerogc(copy, collector_ids(Id), ignore_params(T))]
+pub struct UnionFieldDef<'gc, T: StaticReflect + 'gc = (), Id: CollectorId = EpsilonCollectorId> {
     /// The name of the field
-    pub name: A::String,
+    pub name: GcString<'gc, Id>,
     /// The type of the field
-    pub value_type: TypeId<T, A>,
+    pub value_type: TypeId<'gc, T, Id>,
     /// The numeric index of the field
     ///
     /// This has no effect on generated code, but it should probably correspond
     /// to the order of declaration in the source code
     pub index: usize
 }
-impl<T: StaticReflect, A: TypeAlloc> UnionFieldDef<T, A> {
+impl<'gc, T: StaticReflect, Id: CollectorId> UnionFieldDef<'gc, T, Id> {
     /// Erase the generic type of this field
-    pub const fn erase(&self) -> UnionFieldDef<(), A> {
+    pub const fn erase(&self) -> UnionFieldDef<'gc, (), Id> {
         UnionFieldDef {
             name: self.name,
             value_type: self.value_type.erase(),
@@ -850,7 +833,9 @@ impl<T: StaticReflect, A: TypeAlloc> UnionFieldDef<T, A> {
 ///
 /// Although rust doesn't truly have a concept of 'primitives',
 /// these are the most basic types needed to construct all the others.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(NullTrace, Copy, Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize, GcDeserialize))]
+#[cfg_attr(feature = "serde", zerogc(serde(delegate)))]
 pub enum PrimitiveType {
     /// The zero-length type '()'
     ///
@@ -939,48 +924,28 @@ impl PartialOrd for PrimitiveType {
 }
 
 /// An static reference to a type
-#[derive(Educe)]
+#[derive(Educe, Trace)]
 #[educe(Copy, Clone, Eq, PartialEq, Hash)]
-pub struct TypeId<T: StaticReflect = (), A: TypeAlloc = StaticAlloc> {
-    value: A::InfoRef,
+#[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
+#[zerogc(collector_ids(Id), copy, ignore_params(T))]
+pub struct TypeId<'gc, T: StaticReflect + 'gc = (), Id: CollectorId = EpsilonCollectorId> {
+    value: Gc<'gc, TypeInfo<'gc, Id>, Id>,
     marker: PhantomData<fn() -> T>
 }
-/*
-  * TODO: Fix to use derive
-  *
-  * Right now that doesn't work since it requires `T: 'a`
- */
-#[cfg(feature = "gc")]
-unsafe_gc_impl! {
-    target => TypeId<'a, T>,
-    params => ['a, T: StaticReflect],
-    bounds => {
-        Trace => always,
-        TraceImmutable => always,
-        GcSafe => always,
-        GcRebrand => { where 'a: 'new_gc, T: 'new_gc },
-        GcErase => { where 'a: 'min, T: 'min }
-    },
-    null_trace => always,
-    branded_type => Self,
-    erased_type => Self,
-    NEEDS_TRACE => false,
-    NEEDS_DROP => ::std::mem::needs_drop::<Self>(),
-    visit => |self, visitor| { Ok(()) /* nop */ }
-}
-impl TypeId {
+
+impl TypeId<'static> {
     /// Get the erased TypeId of the specified type `T`
     #[inline]
-    pub const fn erased<T: StaticReflect>() -> TypeId<(), StaticAlloc> {
+    pub const fn erased<T: StaticReflect + 'static>() -> TypeId<'static, (), EpsilonCollectorId> {
         TypeId::<T>::get().erase()
     }
 }
-impl<T: StaticReflect> TypeId<T> {
+impl<T: StaticReflect + 'static> TypeId<'static, T> {
     /// Get the TypeId of the corresponding (generic) type
     #[inline]
     pub const fn get() -> Self {
         TypeId {
-            value: &T::TYPE_INFO,
+            value: epsilon::gc(&T::TYPE_INFO),
             marker: PhantomData
         }
     }
@@ -988,12 +953,12 @@ impl<T: StaticReflect> TypeId<T> {
     #[inline]
     pub const fn from_static(s: &'static TypeInfo) -> Self {
         TypeId {
-            value: s,
+            value: epsilon::gc(s),
             marker: PhantomData
         }
     }
 }
-impl<T: StaticReflect, A: TypeAlloc> TypeId<T, A> {
+impl<'gc, T: StaticReflect, Id: CollectorId> TypeId<'gc, T, Id> {
     /// Erase this type id,
     /// ignoring its statically-known generic
     /// parameters
@@ -1001,7 +966,7 @@ impl<T: StaticReflect, A: TypeAlloc> TypeId<T, A> {
     /// The generic parameters are unchecked, but are
     /// very useful for ensuring safety.
     #[inline]
-    pub const fn erase(self) -> TypeId<(), A> {
+    pub const fn erase(self) -> TypeId<'gc, (), Id> {
         TypeId {
             value: self.value,
             marker: PhantomData,
@@ -1036,7 +1001,7 @@ impl<T: StaticReflect, A: TypeAlloc> TypeId<T, A> {
     /// or `None` if it's not a primitive.
     #[inline]
     pub fn primitive(self) -> Option<PrimitiveType> {
-        Some(match *self.value {
+        Some(match **self.value {
             TypeInfo::Unit => PrimitiveType::Unit,
             TypeInfo::Never => PrimitiveType::Never,
             TypeInfo::Bool => PrimitiveType::Bool,
@@ -1048,12 +1013,12 @@ impl<T: StaticReflect, A: TypeAlloc> TypeId<T, A> {
     }
     /// A reference to the underlying type
     #[inline]
-    pub const fn type_ref(self) -> A::InfoRef {
+    pub const fn type_ref(self) -> Gc<'gc, TypeInfo<'gc, Id>, Id> {
         self.value
     }
     /// Create a [TypeId] from the specified reference
     #[inline]
-    pub const fn from_ref(tp: A::InfoRef) -> Self {
+    pub const fn from_ref(tp: Gc<'gc, TypeInfo<'gc, Id>, Id>) -> Self {
         TypeId {
             marker: PhantomData,
             value: tp
@@ -1067,21 +1032,21 @@ impl<T: StaticReflect, A: TypeAlloc> TypeId<T, A> {
     }
 
 }
-impl<'a, T: StaticReflect> TypeId<*mut T> {
+impl<T: StaticReflect + 'static> TypeId<'static, *mut T> {
     /// The target of the pointer type
     ///
     /// NOTE: This relies on static typing information
     #[inline]
-    pub const fn pointer_target(self) -> TypeId<T> {
+    pub const fn pointer_target(self) -> TypeId<'static, T> {
         TypeId::get()
     }
 }
-impl<T: StaticReflect, A: TypeAlloc> Display for TypeId<T, A> {
+impl<'gc, T: StaticReflect, Id: CollectorId> Display for TypeId<'gc, T, Id> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         Display::fmt(&*self.value, f)
     }
 }
-impl<T: StaticReflect, A: TypeAlloc> Debug for TypeId<T, A> {
+impl<'gc, T: StaticReflect, Id: CollectorId> Debug for TypeId<'gc, T, Id> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_tuple("TypeId")
             .field(&*self.value)
@@ -1090,11 +1055,13 @@ impl<T: StaticReflect, A: TypeAlloc> Debug for TypeId<T, A> {
 }
 
 /// A indexed identifier of a field
-#[derive(Educe)]
+#[derive(Educe, Trace)]
 #[educe(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct FieldId<A: TypeAlloc = StaticAlloc> {
+#[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
+#[zerogc(copy, collector_ids(Id), serde(require_simple_alloc))]
+pub struct FieldId<'gc, Id: CollectorId = EpsilonCollectorId> {
     /// The owner of the field
-    pub owner: TypeId<(), A>,
+    pub owner: TypeId<'gc, (), Id>,
     /// The index of the field
     pub index: usize,
 }
