@@ -38,3 +38,7 @@ members = ["lib/*"]
 [package.metadata.docs.rs]
 all-features = true
 
+[dev-dependencies]
+serde_test = "1"
+static-reflect-derive = { path = "lib/derive" }
+

@@ -395,8 +395,8 @@ impl Default for TaggedUnionStyle {
 #[derive(Educe, Trace)]
 #[educe(Debug, Eq, Copy, Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
-#[cfg_attr(feature = "serde", serde(tag = "kind", rename_all = "snake_case"))]
-#[zerogc(copy, collector_ids(Id))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case", bound(serialize = "")))]
+#[zerogc(copy, collector_ids(Id), serde(require_simple_alloc))]
 pub enum TypeInfo<'gc, Id: CollectorId = EpsilonCollectorId> {
     /// The zero-length unit type `()`
     ///
@@ -584,6 +584,7 @@ impl<'gc, Id: CollectorId> Display for TypeInfo<'gc, Id> {
 /// Static information on the definition of a structure
 #[derive(Educe, Trace)]
 #[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
+#[cfg_attr(feature = "serde", serde(bound(serialize = "")))]
 #[educe(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 #[zerogc(copy, collector_ids(Id))]
 pub struct StructureDef<'gc, Id: CollectorId = EpsilonCollectorId> {
@@ -601,6 +602,7 @@ pub struct StructureDef<'gc, Id: CollectorId = EpsilonCollectorId> {
 #[derive(Educe, Trace)]
 #[educe(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
+#[cfg_attr(feature = "serde", serde(bound(serialize = "")))]
 #[zerogc(copy, collector_ids(Id), serde(require_simple_alloc))]
 pub struct FieldDef<'gc, T: StaticReflect + 'gc = (), Id: CollectorId = EpsilonCollectorId> {
     /// The name of the field, or `None` if this is a tuple struct
@@ -637,6 +639,7 @@ impl<'gc, T: StaticReflect, Id: CollectorId> FieldDef<'gc, T, Id> {
 #[derive(Educe, Trace)]
 #[educe(Clone, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
+#[cfg_attr(feature = "serde", serde(bound(serialize = "")))]
 #[zerogc(copy, collector_ids(Id))]
 pub struct CStyleEnumDef<'gc, Id: CollectorId = EpsilonCollectorId> {
     /// The name of the enumeration
@@ -663,6 +666,7 @@ impl<'gc, Id: CollectorId> CStyleEnumDef<'gc, Id> {
 #[derive(Educe, Trace)]
 #[educe(Clone, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
+#[cfg_attr(feature = "serde", serde(bound(serialize = "")))]
 #[zerogc(copy, collector_ids(Id))]
 pub struct CStyleEnumVariant<'gc, Id: CollectorId = EpsilonCollectorId> {
     /// The index of this variant, specifying the declaration order
@@ -727,6 +731,7 @@ impl DiscriminantValue {
 #[derive(Educe, Trace)]
 #[educe(Clone, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
+#[cfg_attr(feature = "serde", serde(bound(serialize = "")))]
 #[zerogc(copy, collector_ids(Id))]
 pub struct TaggedUnionDef<'gc, Id: CollectorId = EpsilonCollectorId> {
     /// The name of the enum type
@@ -755,6 +760,7 @@ pub struct TaggedUnionDef<'gc, Id: CollectorId = EpsilonCollectorId> {
 #[derive(Educe, Trace)]
 #[educe(Clone, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
+#[cfg_attr(feature = "serde", serde(bound(serialize = "")))]
 #[zerogc(copy, collector_ids(Id), serde(require_simple_alloc))]
 pub struct TaggedUnionVariant<'gc, Id: CollectorId = EpsilonCollectorId> {
     /// The index of this variant, determining the declaration order
@@ -777,6 +783,7 @@ impl<'gc, Id: CollectorId> TaggedUnionVariant<'gc, Id> {
 #[derive(Educe, Trace)]
 #[educe(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
+#[cfg_attr(feature = "serde", serde(bound(serialize = "")))]
 #[zerogc(copy, collector_ids(Id))]
 pub struct UntaggedUnionDef<'gc, Id: CollectorId = EpsilonCollectorId> {
     /// The name of the union
@@ -798,6 +805,7 @@ pub struct UntaggedUnionDef<'gc, Id: CollectorId = EpsilonCollectorId> {
 #[derive(Educe, Trace)]
 #[educe(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
+#[cfg_attr(feature = "serde", serde(bound(serialize = "")))]
 #[zerogc(copy, collector_ids(Id), ignore_params(T))]
 pub struct UnionFieldDef<'gc, T: StaticReflect + 'gc = (), Id: CollectorId = EpsilonCollectorId> {
     /// The name of the field
@@ -927,6 +935,7 @@ impl PartialOrd for PrimitiveType {
 #[derive(Educe, Trace)]
 #[educe(Copy, Clone, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
+#[cfg_attr(feature = "serde", serde(transparent, bound(serialize = "")))]
 #[zerogc(collector_ids(Id), copy, ignore_params(T))]
 pub struct TypeId<'gc, T: StaticReflect + 'gc = (), Id: CollectorId = EpsilonCollectorId> {
     value: Gc<'gc, TypeInfo<'gc, Id>, Id>,
@@ -1058,6 +1067,7 @@ impl<'gc, T: StaticReflect, Id: CollectorId> Debug for TypeId<'gc, T, Id> {
 #[derive(Educe, Trace)]
 #[educe(Copy, Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
+#[cfg_attr(feature = "serde", serde(bound(serialize = "")))]
 #[zerogc(copy, collector_ids(Id), serde(require_simple_alloc))]
 pub struct FieldId<'gc, Id: CollectorId = EpsilonCollectorId> {
     /// The owner of the field
