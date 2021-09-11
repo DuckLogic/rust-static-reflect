@@ -1010,7 +1010,7 @@ impl<'gc, T: StaticReflect, Id: CollectorId> TypeId<'gc, T, Id> {
     /// or `None` if it's not a primitive.
     #[inline]
     pub fn primitive(self) -> Option<PrimitiveType> {
-        Some(match **self.value {
+        Some(match *self.value {
             TypeInfo::Unit => PrimitiveType::Unit,
             TypeInfo::Never => PrimitiveType::Never,
             TypeInfo::Bool => PrimitiveType::Bool,
