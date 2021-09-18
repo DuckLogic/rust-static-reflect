@@ -937,7 +937,7 @@ impl PartialOrd for PrimitiveType {
 #[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
 #[cfg_attr(feature = "serde", serde(transparent, bound(serialize = "")))]
 #[zerogc(collector_ids(Id), copy, ignore_params(T))]
-pub struct TypeId<'gc, T: StaticReflect + 'gc = (), Id: CollectorId = EpsilonCollectorId> {
+pub struct TypeId<'gc, T: StaticReflect = (), Id: CollectorId = EpsilonCollectorId> {
     value: Gc<'gc, TypeInfo<'gc, Id>, Id>,
     marker: PhantomData<fn() -> T>
 }
@@ -945,16 +945,22 @@ pub struct TypeId<'gc, T: StaticReflect + 'gc = (), Id: CollectorId = EpsilonCol
 impl TypeId<'static> {
     /// Get the erased TypeId of the specified type `T`
     #[inline]
-    pub const fn erased<T: StaticReflect + 'static>() -> TypeId<'static, (), EpsilonCollectorId> {
+    pub const fn erased<T: StaticReflect>() -> TypeId<'static, (), EpsilonCollectorId> {
         TypeId::<T>::get().erase()
     }
 }
-impl<T: StaticReflect + 'static> TypeId<'static, T> {
+impl<T: StaticReflect> TypeId<'static, T> {
     /// Get the TypeId of the corresponding (generic) type
     #[inline]
     pub const fn get() -> Self {
+        trait TypeIdRef {
+            const TYPE_REF: &'static TypeInfo<'static>;
+        }
+        impl<T: StaticReflect> TypeIdRef for T {
+            const TYPE_REF: &'static TypeInfo<'static> = &T::TYPE_INFO;
+        }
         TypeId {
-            value: epsilon::gc(&T::TYPE_INFO),
+            value: epsilon::gc(T::TYPE_REF),
             marker: PhantomData
         }
     }

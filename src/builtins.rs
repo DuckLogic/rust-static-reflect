@@ -4,8 +4,9 @@
 //! types.
 use std::mem::MaybeUninit;
 use crate::{StaticReflect, TypeInfo, field_offset};
+use crate::types::TypeId;
 
-use zerogc::{CollectorId, epsilon};
+use zerogc::{CollectorId};
 #[cfg(feature = "gc")]
 use zerogc_derive::Trace;
 
@@ -49,7 +50,7 @@ impl<'a, T: 'a> From<&'a [T]> for AsmSlice<T> {
 }
 unsafe impl<T: StaticReflect> StaticReflect for AsmSlice<T> {
     const TYPE_INFO: TypeInfo<'static> = TypeInfo::Slice {
-        element_type: epsilon::gc(&T::TYPE_INFO)
+        element_type: TypeId::erased::<T>().type_ref()
     };
 }
 
@@ -186,7 +187,7 @@ impl<T> From<Option<T>> for AsmOption<T> {
     }
 }
 unsafe impl<T: StaticReflect> StaticReflect for AsmOption<T> {
-    const TYPE_INFO: TypeInfo<'static> = TypeInfo::Optional(epsilon::gc(&T::TYPE_INFO));
+    const TYPE_INFO: TypeInfo<'static> = TypeInfo::Optional(TypeId::erased::<T>().type_ref());
 }
 
 /// This is an owned value, so it's safe to send
