@@ -972,6 +972,19 @@ impl<T: StaticReflect> TypeId<'static, T> {
             marker: PhantomData
         }
     }
+    /// Shrink the lifetime from `'static` to `'a`
+    ///
+    /// For some reason rust doesn't seem to infer the correct
+    /// lifetime variance.....
+    #[inline]
+    pub const fn shrink_lifetime<'a>(self) -> TypeId<'a, T> {
+        unsafe {
+            std::mem::transmute::<
+                TypeId<'static, T>,
+                TypeId<'a, T>
+            >(self)
+        }
+    }
 }
 impl<'gc, T: StaticReflect, Id: CollectorId> TypeId<'gc, T, Id> {
     /// Erase this type id,
