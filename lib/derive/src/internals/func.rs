@@ -120,7 +120,7 @@ pub fn handle_item(item: &Item, args: FuncArgs) -> Result<TokenStream, syn::Erro
 fn handle_fn_def(item: &ItemFn, args: FuncArgs) -> Result<TokenStream, syn::Error> {
     let location = if args.absolute {
         let name = &item.sig.ident;
-        FunctionLocation::AbsoluteAddress(quote!({ #name as *const () }))
+        FunctionLocation::AbsoluteAddress { addr: quote!({ #name as *const () }) }
     } else {
         let name = determine_fn_link_name(&item)?;
         FunctionLocation::DynamicallyLinked {
@@ -305,7 +305,9 @@ enum FunctionLocation {
     DynamicallyLinked {
         link_name: Option<TokenStream>
     },
-    AbsoluteAddress(TokenStream),
+    AbsoluteAddress {
+        addr: TokenStream
+    },
 }
 
 impl ToTokens for StaticFunctionDef {
@@ -338,8 +340,8 @@ impl ToTokens for FunctionLocation {
             FunctionLocation::DynamicallyLinked { link_name: Some(ref name) } => {
                 quote!(Some(static_reflect::funcs::FunctionLocation::DynamicallyLinked { link_name: Some(#name) }))
             },
-            FunctionLocation::AbsoluteAddress(ref value) => {
-                quote!(Some(static_reflect::funcs::FunctionLocation::AbsoluteAddress(#value)))
+            FunctionLocation::AbsoluteAddress { ref addr } => {
+                quote!(Some(static_reflect::funcs::FunctionLocation::AbsoluteAddress { addr: #addr }))
             },
         });
     }
@@ -352,7 +354,10 @@ impl ToTokens for StaticSignatureDef {
             ref return_type
         } = *self;
         tokens.append_all(quote!(static_reflect::funcs::SignatureDef {
-            argument_types: zerogc::epsilon::gc_array(&[#(#argument_types),*]),
+            argument_types: zerogc::epsilon::gc_array({
+                const ARGS: &[static_reflect::types::TypeInfo] = &[#(#argument_types),*];
+                ARGS
+            }),
             return_type: #return_type,
             // We use C FFI
             calling_convention: static_reflect::funcs::CallingConvention::StandardC

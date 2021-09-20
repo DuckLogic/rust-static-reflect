@@ -50,18 +50,18 @@ union SimpleUnion {
 
 #[test]
 fn test_union_types() {
-    const EXPECTED_UNION: TypeInfo<'static> = TypeInfo::UntaggedUnion(gc(&UntaggedUnionDef {
+    let expected_union: TypeInfo<'static> = TypeInfo::UntaggedUnion(leaked(UntaggedUnionDef {
         name: gc_str("SimpleUnion"),
-        fields: gc_array(&[
+        fields: gc_array(vec![
             SimpleUnion::NAMED_FIELD_INFO.text.erase(),
             SimpleUnion::NAMED_FIELD_INFO.b.erase(),
             SimpleUnion::NAMED_FIELD_INFO.f.erase(),
             SimpleUnion::NAMED_FIELD_INFO.nested.erase(),
-        ]),
+        ].leak()),
         size: size_of::<SimpleUnion>(),
         alignment: align_of::<SimpleUnion>()
     }));
-    assert_eq!(EXPECTED_UNION, SimpleUnion::TYPE_INFO);
+    assert_eq!(expected_union, SimpleUnion::TYPE_INFO);
     assert_eq!(SimpleUnion::NAMED_FIELD_INFO.text, UnionFieldDef {
         name: gc_str("text"),
         value_type: TypeId::<*mut String>::get(),
@@ -86,17 +86,17 @@ fn test_union_types() {
 
 #[test]
 fn test_struct_types() {
-    const NESTED_TYPE: TypeInfo<'static> = TypeInfo::Structure(gc(&StructureDef {
+    let nested_type: TypeInfo<'static> = TypeInfo::Structure(leaked(StructureDef {
         name: gc_str("Nested"),
-        fields: gc_array(&[
+        fields: gc_array(vec![
             Nested::NAMED_FIELD_INFO.cycle.erase(),
             Nested::NAMED_FIELD_INFO.float.erase(),
             Nested::NAMED_FIELD_INFO.number.erase(),
-        ]),
+        ].leak()),
         size: size_of::<Nested>(),
         alignment: align_of::<Nested>()
     }));
-    assert_eq!(Nested::TYPE_INFO, NESTED_TYPE);
+    assert_eq!(Nested::TYPE_INFO, nested_type);
     assert_eq!(Nested::NAMED_FIELD_INFO.cycle, FieldDef {
         name: Some(gc_str("cycle")),
         value_type: TypeId::<*mut SimpleStruct>::get(),
@@ -279,16 +279,16 @@ struct OpaqueArray {
 
 #[test]
 fn test_options() {
-    const OPAQUE_ARRAY_TYPE: TypeInfo<'static> = TypeInfo::Structure(gc(&StructureDef {
+    let opaque_array_type: TypeInfo<'static> = TypeInfo::Structure(leaked(StructureDef {
         name: gc_str("OpaqueArray"),
-        fields: gc_array(&[
+        fields: gc_array(vec![
             OpaqueArray::NAMED_FIELD_INFO.first.erase(),
             OpaqueArray::NAMED_FIELD_INFO.array.erase(),
-        ]),
+        ].leak()),
         size: size_of::<OpaqueArray>(),
         alignment: align_of::<OpaqueArray>()
     }));
-    assert_eq!(OPAQUE_ARRAY_TYPE, OpaqueArray::TYPE_INFO);
+    assert_eq!(opaque_array_type, OpaqueArray::TYPE_INFO);
     assert_eq!(OpaqueArray::NAMED_FIELD_INFO.first, FieldDef {
         name: Some(gc_str("first")),
         value_type: TypeId::<i8>::get(), // It's actually a 'u8', but we assume_repr

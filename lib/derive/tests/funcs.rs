@@ -1,6 +1,6 @@
 use std::os::raw::c_void;
 
-use zerogc::epsilon::{gc, gc_str, gc_array};
+use zerogc::epsilon::{gc_str, gc_array};
 use static_reflect_derive::reflect_func;
 use static_reflect::StaticReflect;
 use static_reflect::funcs::{FunctionDeclaration, FunctionLocation, SignatureDef};
@@ -50,7 +50,7 @@ fn extern_block() {
             is_unsafe: true, // Foreign functions are always unsafe (in spite of lack of keyword)
             location: Some(FunctionLocation::DynamicallyLinked { link_name: None }),
             signature: SignatureDef {
-                argument_types: gc_array(&[usize::TYPE_INFO]),
+                argument_types: gc_array(vec![usize::TYPE_INFO].leak()),
                 return_type: TypeInfo::Pointer,
                 calling_convention: Default::default()
             },
@@ -65,7 +65,7 @@ fn extern_block() {
             is_unsafe: true, // NOTE: Foreign function
             location: Some(FunctionLocation::DynamicallyLinked { link_name: Some(gc_str("sqrtf")) }),
             signature: SignatureDef {
-                argument_types: gc_array(&[f32::TYPE_INFO]),
+                argument_types: gc_array(vec![f32::TYPE_INFO].leak()),
                 return_type: f32::TYPE_INFO,
                 calling_convention: Default::default()
             },
@@ -86,7 +86,7 @@ fn rust_funcs() {
             is_unsafe: true,
             location: Some(FunctionLocation::DynamicallyLinked { link_name: None }),
             signature: SignatureDef {
-                argument_types: gc_array(&[u32::TYPE_INFO, TypeInfo::Pointer]),
+                argument_types: gc_array(vec![u32::TYPE_INFO, TypeInfo::Pointer].leak()),
                 return_type: TypeInfo::F32,
                 calling_convention: Default::default()
             },
@@ -101,7 +101,7 @@ fn rust_funcs() {
             is_unsafe: false,
             location: Some(FunctionLocation::DynamicallyLinked { link_name: Some(gc_str("better_name")) }),
             signature: SignatureDef {
-                argument_types: gc_array(&[f32::TYPE_INFO, TypeInfo::Float { size: FloatSize::Single }]),
+                argument_types: gc_array(vec![f32::TYPE_INFO, TypeInfo::Float { size: FloatSize::Single }].leak()),
                 return_type: TypeInfo::Unit,
                 calling_convention: Default::default()
             },
@@ -114,9 +114,9 @@ fn rust_funcs() {
         FunctionDeclaration::<f64, (f64, f64)> {
             name: gc_str("absolute_address_example"),
             is_unsafe: false,
-            location: Some(FunctionLocation::AbsoluteAddress(absolute_address_example as *const ())),
+            location: Some(FunctionLocation::AbsoluteAddress { addr: absolute_address_example as *const () }),
             signature: SignatureDef {
-                argument_types: gc_array(&[f64::TYPE_INFO, f64::TYPE_INFO]),
+                argument_types: gc_array(vec![f64::TYPE_INFO, f64::TYPE_INFO].leak()),
                 return_type: f64::TYPE_INFO,
                 calling_convention: Default::default()
             },
