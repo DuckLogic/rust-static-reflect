@@ -604,7 +604,7 @@ pub struct StructureDef<'gc, Id: CollectorId = EpsilonCollectorId> {
 #[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
 #[cfg_attr(feature = "serde", serde(bound(serialize = "")))]
 #[zerogc(copy, collector_ids(Id), serde(require_simple_alloc))]
-pub struct FieldDef<'gc, T: StaticReflect + 'gc = (), Id: CollectorId = EpsilonCollectorId> {
+pub struct FieldDef<'gc, T: StaticReflect = (), Id: CollectorId = EpsilonCollectorId> {
     /// The name of the field, or `None` if this is a tuple struct
     pub name: Option<GcString<'gc, Id>>,
     /// The type of the field
@@ -807,7 +807,7 @@ pub struct UntaggedUnionDef<'gc, Id: CollectorId = EpsilonCollectorId> {
 #[cfg_attr(feature = "serde", derive(Serialize, GcDeserialize))]
 #[cfg_attr(feature = "serde", serde(bound(serialize = "")))]
 #[zerogc(copy, collector_ids(Id), ignore_params(T))]
-pub struct UnionFieldDef<'gc, T: StaticReflect + 'gc = (), Id: CollectorId = EpsilonCollectorId> {
+pub struct UnionFieldDef<'gc, T: StaticReflect = (), Id: CollectorId = EpsilonCollectorId> {
     /// The name of the field
     pub name: GcString<'gc, Id>,
     /// The type of the field
@@ -939,7 +939,7 @@ impl PartialOrd for PrimitiveType {
 #[zerogc(collector_ids(Id), copy, ignore_params(T))]
 pub struct TypeId<'gc, T: StaticReflect = (), Id: CollectorId = EpsilonCollectorId> {
     value: Gc<'gc, TypeInfo<'gc, Id>, Id>,
-    marker: PhantomData<fn() -> T>
+    marker: PhantomData<fn(T)>
 }
 
 impl TypeId<'static> {
@@ -970,19 +970,6 @@ impl<T: StaticReflect> TypeId<'static, T> {
         TypeId {
             value: epsilon::gc(s),
             marker: PhantomData
-        }
-    }
-    /// Shrink the lifetime from `'static` to `'a`
-    ///
-    /// For some reason rust doesn't seem to infer the correct
-    /// lifetime variance.....
-    #[inline]
-    pub const fn shrink_lifetime<'a>(self) -> TypeId<'a, T> {
-        unsafe {
-            std::mem::transmute::<
-                TypeId<'static, T>,
-                TypeId<'a, T>
-            >(self)
         }
     }
 }
@@ -1094,4 +1081,5 @@ pub struct FieldId<'gc, Id: CollectorId = EpsilonCollectorId> {
     /// The index of the field
     pub index: usize,
 }
+
 
