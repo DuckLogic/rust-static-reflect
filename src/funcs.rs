@@ -53,7 +53,7 @@ impl<'gc, R, Args, Id: CollectorId> FunctionDeclaration<'gc, R, Args, Id> {
     }
     /// Erase all statically known type information
     #[inline]
-    pub fn erase(&self) -> &'_ FunctionDeclaration<'gc, (), (), Id> {
+    pub const fn erase(&self) -> &'_ FunctionDeclaration<'gc, (), (), Id> {
         unsafe { &*(self as *const Self as *const FunctionDeclaration<(), (), Id>) }
     }
 }
