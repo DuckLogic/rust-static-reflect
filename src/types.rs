@@ -939,7 +939,7 @@ impl PartialOrd for PrimitiveType {
 #[zerogc(collector_ids(Id), copy, ignore_params(T))]
 pub struct TypeId<'gc, T: StaticReflect = (), Id: CollectorId = EpsilonCollectorId> {
     value: Gc<'gc, TypeInfo<'gc, Id>, Id>,
-    marker: PhantomData<fn(T)>
+    marker: PhantomData<fn() -> T>
 }
 
 impl TypeId<'static> {
@@ -1082,4 +1082,16 @@ pub struct FieldId<'gc, Id: CollectorId = EpsilonCollectorId> {
     pub index: usize,
 }
 
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn lifetime_variance<'a>() {
+        fn covariant<'a>(s: TypeId<'static, u32>) -> TypeId<'a, u32> {
+            s as _
+        }
+        let s: TypeId<'a, u32> = covariant(TypeId::<u32>::get());
+        assert_eq!(s.erase(), TypeId::erased::<u32>());
+    }
 
+}
