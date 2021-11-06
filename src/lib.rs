@@ -10,9 +10,8 @@
 //! I'd be happy to add more features as long as they align with the general philosophy
 //! of compile-time reflection.
 #![deny(missing_docs)]
-#![deny(unused_features, stable_features)]
 #![feature(
-    const_panic, const_option, // We use Option::unwrap
+    const_option, // We use Option::unwrap
     const_fn_fn_ptr_basics, // We use PhantomData<fn() -> T>
     const_fn_trait_bound,
     // Used for field_offset macro

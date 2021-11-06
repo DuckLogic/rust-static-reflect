@@ -1,7 +1,5 @@
 #![feature(
     never_type,
-    // RFC has been accepted
-    const_panic
 )]
 use pretty_assertions::assert_eq;
 
