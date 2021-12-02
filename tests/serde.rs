@@ -1,4 +1,3 @@
-#![feature(const_panic, )]
 use static_reflect_derive::StaticReflect;
 use static_reflect::StaticReflect;
 use static_reflect::builtins::AsmStr;
