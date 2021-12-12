@@ -15,8 +15,6 @@
     const_fn_fn_ptr_basics, // We use PhantomData<fn() -> T>
     const_fn_trait_bound,
     // Used for field_offset macro
-    const_raw_ptr_deref,
-    const_maybe_uninit_as_ptr,
     const_ptr_offset_from,
 )]
 #![cfg_attr(feature = "never", feature(never_type))]
