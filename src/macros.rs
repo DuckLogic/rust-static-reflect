@@ -6,7 +6,7 @@ macro_rules! define_extern_type {
     ($target:ident) => ($crate::define_extern_type!($target => $target););
     ($target:ty => $defined_path:path) => {
         unsafe impl $crate::StaticReflect for $target {
-            const TYPE_INFO: $crate::TypeInfo<'static> = $crate::TypeInfo::Extern {
+            const TYPE_INFO: $crate::TypeInfo = $crate::TypeInfo::Extern {
                 name: stringify!($defined_path)
             };
         }
@@ -42,7 +42,7 @@ macro_rules! define_extern_type {
 /// Assuming you specify the appropriate feature flags,
 /// this macro can also be used in a const-eval context.
 /// ````
-/// #![feature(const_raw_ptr_deref, const_maybe_uninit_as_ptr, const_ptr_offset_from)]
+/// #![feature(const_ptr_offset_from)]
 /// # #![deny(unused_features, stable_features)]
 /// # use static_reflect::field_offset;
 /// struct Example {

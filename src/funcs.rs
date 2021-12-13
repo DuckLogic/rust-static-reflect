@@ -5,10 +5,10 @@ use std::marker::PhantomData;
 /// The declaration of a function whose information
 /// is known to the static reflection system
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct FunctionDeclaration<'a, R = (), Args = ()> {
+pub struct FunctionDeclaration<R = (), Args = ()> {
     /// The name of the function, as declared in the
     /// source code.
-    pub name: &'a str,
+    pub name: &'static str,
     /// If the function is unsafe
     pub is_unsafe: bool,
     /// The location of the function (if known)
@@ -19,13 +19,13 @@ pub struct FunctionDeclaration<'a, R = (), Args = ()> {
     /// its arguments and return types
     ///
     /// Unlike the [PhantomData], this is actually retained at runtime.
-    pub signature: SignatureDef<'a>,
+    pub signature: SignatureDef,
     /// PhantomData: The return type of the function 
     pub return_type: PhantomData<fn() -> R>,
     /// PhantomData: The argument types of the function
     pub arg_types: PhantomData<fn(Args) -> ()>,
 }
-impl<'a, R, Args> FunctionDeclaration<'a, R, Args> {
+impl<R, Args> FunctionDeclaration<R, Args> {
     /// If the function has a known location at runtime
     ///
     /// If this is false, it wont actually be possible
@@ -37,7 +37,7 @@ impl<'a, R, Args> FunctionDeclaration<'a, R, Args> {
     }
     /// Erase all statically known type information
     #[inline]
-    pub fn erase(&'a self) -> &'a FunctionDeclaration<(), ()> {
+    pub fn erase(&'static self) -> &'static FunctionDeclaration<(), ()> {
         unsafe { &*(self as *const Self as *const FunctionDeclaration<(), ()>) }
     }
 }
@@ -45,11 +45,11 @@ impl<'a, R, Args> FunctionDeclaration<'a, R, Args> {
 ///
 /// Includes its argument types, return type, and calling convention.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct SignatureDef<'tp> {
+pub struct SignatureDef {
     /// A list of argument types to the function
-    pub argument_types: &'tp [TypeInfo<'tp>],
+    pub argument_types: &'static [TypeInfo],
     /// The return type of the function
-    pub return_type: &'tp TypeInfo<'tp>,
+    pub return_type: &'static TypeInfo,
     /// The calling convention
     pub calling_convention: CallingConvention
 }

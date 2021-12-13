@@ -318,7 +318,7 @@ impl ToTokens for StaticFunctionDef {
             ref static_return_type,
             static_arg_types: ref staitc_arg_types
         } = *self;
-        tokens.append_all(quote!(static_reflect::funcs::FunctionDeclaration::<'static, #static_return_type, #staitc_arg_types> {
+        tokens.append_all(quote!(static_reflect::funcs::FunctionDeclaration::<#static_return_type, #staitc_arg_types> {
             name: #name,
             is_unsafe: #is_unsafe,
             signature: #signature,

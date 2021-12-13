@@ -135,7 +135,7 @@ pub fn derive_static_reflect(input: &DeriveInput) -> Result<TokenStream, syn::Er
     let r = quote! {
         #(#extra_defs)*
         unsafe impl #impl_generics static_reflect::StaticReflect for #name #ty_generics #where_clause {
-            const TYPE_INFO: static_reflect::types::TypeInfo<'static> = {
+            const TYPE_INFO: static_reflect::types::TypeInfo = {
                 /*
                  * NOTE: All our fields are assumed to implement `StaticReflect`,
                  * because there is no other way they could show up
@@ -235,12 +235,12 @@ fn handle_type<'a, T: TypeHandler<'a>>(
         use static_reflect::types::TypeInfo;
         use #field_def_type_name;
         use #type_def_type;
-        const _FIELDS: &'static [#field_def_type_name<'static>] = &[#(<#name as FieldReflect>::NAMED_FIELD_INFO.#field_access.erase()),*];
+        const _FIELDS: &'static [#field_def_type_name] = &[#(<#name as FieldReflect>::NAMED_FIELD_INFO.#field_access.erase()),*];
     };
     let static_def = target.create_static_def(header);
     let into_type = T::def_into_type(quote!(_DEF));
     Ok(quote!({
-        const _DEF: &'static #type_def_type<'static> = &#static_def;
+        const _DEF: &'static #type_def_type = &#static_def;
         #into_type
     }))
 }
@@ -345,7 +345,7 @@ impl<'a> TypeHandler<'a> for StructHandler<'a> {
 
     fn field_def_type(field_type: Option<TokenStream>) -> TokenStream {
         match field_type {
-            Some(inner) => quote!(static_reflect::types::FieldDef<'static, #inner>),
+            Some(inner) => quote!(static_reflect::types::FieldDef<#inner>),
             None => quote!(static_reflect::types::FieldDef)
         }
     }

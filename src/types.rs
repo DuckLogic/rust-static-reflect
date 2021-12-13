@@ -8,7 +8,7 @@ use std::marker::PhantomData;
 use std::fmt::{self, Formatter, Display, Debug, Write};
 
 #[cfg(feature = "gc")]
-use zerogc_derive::{unsafe_gc_impl};
+use zerogc_derive::NullTrace;
 
 #[cfg(feature = "builtins")]
 use crate::builtins::{AsmSlice, AsmStr};
@@ -27,6 +27,7 @@ pub unsafe trait SimpleNonZeroRepr: StaticReflect {}
 /// For example, the C standard technically allows 16-bit ints
 /// or 32-bit longs.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[cfg_attr(feature="gc", derive(NullTrace))]
 #[repr(u8)]
 pub enum IntSize {
     /// A single byte (`u8`)
@@ -123,6 +124,7 @@ impl std::error::Error for InvalidSizeErr {}
 /// The size of a floating point number,
 /// either single-precision or double-precision
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[cfg_attr(feature="gc", derive(NullTrace))]
 pub enum FloatSize {
     /// A single-precision floating point number.
     ///
@@ -165,6 +167,7 @@ impl Default for FloatSize {
 
 /// An integer type
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature="gc", derive(NullTrace))]
 pub struct IntType {
     /// The size of this integer
     pub size: IntSize,
@@ -314,6 +317,7 @@ impl Display for IntType {
 /// The `second` field is naturally aligned, making the whole `EfficientRepr` only `4` bytes,
 /// in contrast to the 5-byte representation of `TraditionalRepr`.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature="gc", derive(NullTrace))]
 pub enum TaggedUnionStyle {
     /// The ["traditional" representation](https://doc.rust-lang.org/nightly/reference/type-layout.html#reprc-enums-with-fields),
     /// which is specified by `#[repr(C)]`
@@ -375,7 +379,8 @@ impl Default for TaggedUnionStyle {
 /// However, they can be allocated at runtime,
 /// and potentially live for a more limited lifetime.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub enum TypeInfo<'a> {
+#[cfg_attr(feature="gc", derive(NullTrace))]
+pub enum TypeInfo {
     /// The zero-length unit type `()`
     ///
     /// Used for functions that return nothing
@@ -407,7 +412,7 @@ pub enum TypeInfo<'a> {
     #[cfg(feature = "builtins")]
     Slice {
         /// The type of the inner element
-        element_type: &'a TypeInfo<'a>,
+        element_type: &'static TypeInfo,
     },
     /// A pointer to a UTF8 encoded string and length,
     /// just like Rust's 'str' type
@@ -419,7 +424,7 @@ pub enum TypeInfo<'a> {
     ///
     /// This **never** uses the null pointer optimization
     #[cfg(feature = "builtins")]
-    Optional(&'a TypeInfo<'a>),
+    Optional(&'static TypeInfo),
     /// An untyped pointer
     ///
     /// This may be null.
@@ -429,19 +434,19 @@ pub enum TypeInfo<'a> {
     /// in case a structure contains a pointer to itself.
     Pointer,
     /// A structure
-    Structure(&'a StructureDef<'a>),
+    Structure(&'static StructureDef),
     /// An untagged union
-    UntaggedUnion(&'a UntaggedUnionDef<'a>),
+    UntaggedUnion(&'static UntaggedUnionDef),
     /// A tagged union with a well-defined Rust-compatible layout.
     /// See RFC #2195 for complete details on how `#[repr(C)]` enums are defined.
     ///
     /// There are two different representations for tagged unions.
     /// See [TaggedUnionStyle] for details.
-    TaggedUnion(&'a TaggedUnionDef<'a>),
+    TaggedUnion(&'static TaggedUnionDef),
     /// A C-style enum, without any data.
     ///
     /// See [TypeInfo::TaggedUnion] for enums *with* data.
-    CStyleEnum(&'a CStyleEnumDef<'a>),
+    CStyleEnum(&'static CStyleEnumDef),
     /// A named, transparent, extern type
     Extern {
         /// The name of the type
@@ -459,40 +464,16 @@ pub enum TypeInfo<'a> {
         /// and what it actually means.
         id: &'static &'static str,
         /// Extra information (if any)
-        extra: Option<&'a TypeInfo<'a>>,
+        extra: Option<&'static TypeInfo>
     }
 }
-/*
- * HACK: Implement AsmType as `NullTrace`
- *
- * Unfortunately this means the type cannot use
- * garbage collected references.
- */
-#[cfg(feature = "gc")]
-unsafe_gc_impl! {
-    target => TypeInfo<'a>,
-    params => ['a],
-    bounds => {
-        Trace => always,
-        TraceImmutable => always,
-        GcSafe => always,
-        GcRebrand => { where 'a: 'new_gc },
-        GcErase => { where 'a: 'min }
-    },
-    null_trace => always,
-    branded_type => Self,
-    erased_type => Self,
-    NEEDS_TRACE => false,
-    NEEDS_DROP => ::std::mem::needs_drop::<Self>(),
-    visit => |self, visitor| { Ok(()) /* nop */ }
-}
-impl TypeInfo<'static> {
+impl TypeInfo {
     /// A 32-bit, single-precision float
     pub const F32: Self = TypeInfo::Float { size: FloatSize::Single };
     /// A 64-bit, double-precision float
     pub const F64: Self = TypeInfo::Float { size: FloatSize::Double };
 }
-impl<'tp> TypeInfo<'tp> {
+impl TypeInfo {
     /// The size of the type, in bytes
     pub const fn size(&self) -> usize {
         use std::mem::size_of;
@@ -543,7 +524,7 @@ impl<'tp> TypeInfo<'tp> {
         }
     }
 }
-impl<'a> Display for TypeInfo<'a> {
+impl Display for TypeInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match *self {
             TypeInfo::Unit => f.write_str("()"),
@@ -567,18 +548,19 @@ impl<'a> Display for TypeInfo<'a> {
 }
 /// Static information on the definition of a structure
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub struct StructureDef<'a> {
+#[cfg_attr(feature="gc", derive(NullTrace))]
+pub struct StructureDef {
     /// The name of the structure
-    pub name: &'a str,
+    pub name: &'static str,
     /// All of the fields defined in the structure
-    pub fields: &'a [FieldDef<'a>],
+    pub fields: &'static [FieldDef],
     /// The total size of the structure (including padding)
     pub size: usize,
     /// The required alignment of the structure
     pub alignment: usize,
 }
-impl<T: StaticReflect> Copy for FieldDef<'_, T> {}
-impl<T: StaticReflect> Clone for FieldDef<'_, T> {
+impl<T: StaticReflect> Copy for FieldDef<T> {}
+impl<T: StaticReflect> Clone for FieldDef<T> {
     #[inline]
     fn clone(&self) -> Self {
         *self
@@ -586,11 +568,13 @@ impl<T: StaticReflect> Clone for FieldDef<'_, T> {
 }
 /// The definition of a field
 #[derive(Debug, Eq, PartialEq, Hash)]
-pub struct FieldDef<'tp, T: StaticReflect = ()> {
+#[cfg_attr(feature="gc", derive(NullTrace))]
+#[cfg_attr(feature="gc",zerogc(ignore_params(T)))]
+pub struct FieldDef<T: StaticReflect = ()> {
     /// The name of the field, or `None` if this is a tuple struct
-    pub name: Option<&'tp str>,
+    pub name: Option<&'static str>,
     /// The type of the field
-    pub value_type: TypeId<'tp, T>,
+    pub value_type: TypeId<T>,
     /// The offset of the field in bytes
     pub offset: usize,
     /// The numeric index of the field
@@ -598,10 +582,10 @@ pub struct FieldDef<'tp, T: StaticReflect = ()> {
     /// Should correspond to the order of declaration
     pub index: usize
 }
-impl<'a, T: StaticReflect> FieldDef<'a, T> {
+impl<T: StaticReflect> FieldDef<T> {
     /// Erase the static type information from this field definition
     #[inline]
-    pub const fn erase(&self) -> FieldDef<'a> {
+    pub const fn erase(&self) -> FieldDef {
         FieldDef {
             name: self.name,
             value_type: self.value_type.erase(),
@@ -619,7 +603,8 @@ impl<'a, T: StaticReflect> FieldDef<'a, T> {
 ///
 /// The variants of a C-style enum may not have any data.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct CStyleEnumDef<'tp> {
+#[cfg_attr(feature="gc", derive(NullTrace))]
+pub struct CStyleEnumDef {
     /// The name of the enumeration
     pub name: &'static str,
     /// The integer type of the discriminant
@@ -627,9 +612,9 @@ pub struct CStyleEnumDef<'tp> {
     /// This is what determines the enum's runtime size and alignment.
     pub discriminant: IntType,
     /// The valid variants of this enum
-    pub variants: &'tp [CStyleEnumVariant]
+    pub variants: &'static [CStyleEnumVariant]
 }
-impl<'tp> CStyleEnumDef<'tp> {
+impl CStyleEnumDef {
     /// Determines whether this enum has any explicit discriminant values,
     /// overriding the defaults.
     ///
@@ -642,6 +627,7 @@ impl<'tp> CStyleEnumDef<'tp> {
 }
 /// A variant in a C-style enum (a Rust enum without any data)
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature="gc", derive(NullTrace))]
 pub struct CStyleEnumVariant {
     /// The index of this variant, specifying the declaration order
     pub index: usize,
@@ -652,6 +638,7 @@ pub struct CStyleEnumVariant {
 }
 /// The value of the discriminant
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature="gc", derive(NullTrace))]
 pub enum DiscriminantValue {
     /// The discriminant has the default value,
     /// which is implicitly equal to its declaration order.
@@ -701,9 +688,10 @@ impl DiscriminantValue {
 ///
 /// These are just FFI-compatible Rust enums annotated with `#[repr(C)]`.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct TaggedUnionDef<'tp> {
+#[cfg_attr(feature="gc", derive(NullTrace))]
+pub struct TaggedUnionDef {
     /// The name of the enum type
-    pub name: &'tp str,
+    pub name: &'static str,
     /// The "style" of the tagged union.
     ///
     /// Tagged unions have two possible representations.
@@ -712,7 +700,7 @@ pub struct TaggedUnionDef<'tp> {
     /// The type of the enum's discriminant
     pub discriminant_type: IntType,
     /// The variants of this tagged enum
-    pub variants: &'tp [TaggedUnionVariant<'tp>],
+    pub variants: &'static [TaggedUnionVariant],
     /// The size of the type
     pub size: usize,
     /// The alignment of the type
@@ -726,30 +714,32 @@ pub struct TaggedUnionDef<'tp> {
 /// This mostly functions as a wrapper around a [StructureDef],
 /// which stores information on the variant's fields (and whether or
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct TaggedUnionVariant<'tp> {
+#[cfg_attr(feature="gc", derive(NullTrace))]
+pub struct TaggedUnionVariant {
     /// The index of this variant, determining the declaration order
     pub index: usize,
     /// The structure this enum-variant is equivalent to.
     ///
     /// It has a matching name, fields, and size.
-    pub equivalent_structure: StructureDef<'tp>,
+    pub equivalent_structure: StructureDef,
     /// The value of the enum's discriminant
     pub discriminant: DiscriminantValue
 }
-impl<'tp> TaggedUnionVariant<'tp> {
+impl TaggedUnionVariant {
     /// The name of the variant
     #[inline]
-    pub const fn name(&self) -> &'tp str {
+    pub const fn name(&self) -> &'static str {
         self.equivalent_structure.name
     }
 }
 /// The definition of an untagged union which is known at compile-time
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub struct UntaggedUnionDef<'a> {
+#[cfg_attr(feature="gc", derive(NullTrace))]
+pub struct UntaggedUnionDef {
     /// The name of the union
-    pub name: &'a str,
+    pub name: &'static str,
     /// The fields of the union
-    pub fields: &'a [UnionFieldDef<'a>],
+    pub fields: &'static [UnionFieldDef],
     /// The size of the union, in bytes
     ///
     /// Should equal the size of its largest member
@@ -763,20 +753,22 @@ pub struct UntaggedUnionDef<'a> {
 
 /// A field of a union which is known at compile-time
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub struct UnionFieldDef<'tp, T: StaticReflect = ()> {
+#[cfg_attr(feature="gc", derive(NullTrace))]
+#[cfg_attr(feature="gc",zerogc(ignore_params(T)))]
+pub struct UnionFieldDef<T: StaticReflect = ()> {
     /// The name of the field
-    pub name: &'tp str,
+    pub name: &'static str,
     /// The type of the field
-    pub value_type: TypeId<'tp, T>,
+    pub value_type: TypeId<T>,
     /// The numeric index of the field
     ///
     /// This has no effect on generated code, but it should probably correspond
     /// to the order of declaration in the source code
     pub index: usize
 }
-impl<'a, T: StaticReflect> UnionFieldDef<'a, T> {
+impl<T: StaticReflect> UnionFieldDef<T> {
     /// Erase the generic type of this field
-    pub const fn erase(&self) -> UnionFieldDef<'a> {
+    pub const fn erase(&self) -> UnionFieldDef {
         UnionFieldDef {
             name: self.name,
             value_type: self.value_type.erase(),
@@ -798,6 +790,7 @@ impl<'a, T: StaticReflect> UnionFieldDef<'a, T> {
 /// Although rust doesn't truly have a concept of 'primitives',
 /// these are the most basic types needed to construct all the others.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature="gc", derive(NullTrace))]
 pub enum PrimitiveType {
     /// The zero-length type '()'
     ///
@@ -823,7 +816,7 @@ pub enum PrimitiveType {
 }
 impl PrimitiveType {
     /// The type information for this primitive type
-    pub fn type_info(&self) -> &TypeInfo<'static> {
+    pub fn type_info(&self) -> &TypeInfo {
         use self::PrimitiveType::*;
         use self::IntSize::*;
         use self::FloatSize::*;
@@ -885,8 +878,8 @@ impl PartialOrd for PrimitiveType {
     }
 }
 
-impl<T: StaticReflect> Copy for TypeId<'_, T> {}
-impl<T: StaticReflect> Clone for TypeId<'_, T> {
+impl<T: StaticReflect> Copy for TypeId<T> {}
+impl<T: StaticReflect> Clone for TypeId<T> {
     #[inline]
     fn clone(&self) -> Self {
         *self
@@ -895,41 +888,20 @@ impl<T: StaticReflect> Clone for TypeId<'_, T> {
 
 /// An static reference to a type
 #[derive(Eq, PartialEq, Hash)]
-pub struct TypeId<'a, T: StaticReflect = ()> {
-    value: &'a TypeInfo<'a>,
+#[cfg_attr(feature="gc", derive(NullTrace))]
+#[cfg_attr(feature="gc",zerogc(ignore_params(T)))]
+pub struct TypeId<T: StaticReflect = ()> {
+    value: &'static TypeInfo,
     marker: PhantomData<fn() -> T>
 }
-/*
-  * TODO: Fix to use derive
-  *
-  * Right now that doesn't work since it requires `T: 'a`
- */
-#[cfg(feature = "gc")]
-unsafe_gc_impl! {
-    target => TypeId<'a, T>,
-    params => ['a, T: StaticReflect],
-    bounds => {
-        Trace => always,
-        TraceImmutable => always,
-        GcSafe => always,
-        GcRebrand => { where 'a: 'new_gc, T: 'new_gc },
-        GcErase => { where 'a: 'min, T: 'min }
-    },
-    null_trace => always,
-    branded_type => Self,
-    erased_type => Self,
-    NEEDS_TRACE => false,
-    NEEDS_DROP => ::std::mem::needs_drop::<Self>(),
-    visit => |self, visitor| { Ok(()) /* nop */ }
-}
-impl TypeId<'static> {
+impl TypeId {
     /// Get the erased TypeId of the specified type `T`
     #[inline]
-    pub const fn erased<T: StaticReflect>() -> TypeId<'static> {
+    pub const fn erased<T: StaticReflect>() -> TypeId {
         TypeId::<T>::get().erase()
     }
 }
-impl<T: StaticReflect> TypeId<'static, T> {
+impl<T: StaticReflect> TypeId<T> {
     /// Get the TypeId of the corresponding (generic) type
     #[inline]
     pub const fn get() -> Self {
@@ -940,14 +912,12 @@ impl<T: StaticReflect> TypeId<'static, T> {
     }
     /// Return a checked [TypeId] corresponding to the specified
     #[inline]
-    pub const fn from_static(s: &'static TypeInfo<'static>) -> Self {
+    pub const fn from_static(s: &'static TypeInfo) -> Self {
         TypeId {
             value: s,
             marker: PhantomData
         }
     }
-}
-impl<'tp, T: StaticReflect> TypeId<'tp, T> {
     /// Erase this type id,
     /// ignoring its statically-known generic
     /// parameters
@@ -955,7 +925,7 @@ impl<'tp, T: StaticReflect> TypeId<'tp, T> {
     /// The generic parameters are unchecked, but are
     /// very useful for ensuring safety.
     #[inline]
-    pub const fn erase(self) -> TypeId<'tp> {
+    pub const fn erase(self) -> TypeId {
         TypeId {
             value: self.value,
             marker: PhantomData,
@@ -1002,12 +972,13 @@ impl<'tp, T: StaticReflect> TypeId<'tp, T> {
     }
     /// A reference to the underlying type
     #[inline]
-    pub const fn type_ref(self) -> &'tp TypeInfo<'tp> {
+    pub const fn type_ref(self) -> &'static TypeInfo {
         self.value
     }
     /// Create a [TypeId] from the specified reference
     #[inline]
-    pub const fn from_ref(tp: &'tp TypeInfo<'tp>) -> Self {
+    #[deprecated(note = "Use from_")]
+    pub const fn from_ref(tp: &'static TypeInfo) -> Self {
         TypeId {
             marker: PhantomData,
             value: tp
@@ -1021,27 +992,27 @@ impl<'tp, T: StaticReflect> TypeId<'tp, T> {
     }
 
 }
-impl<'a, T: StaticReflect> TypeId<'a, *mut T> {
+impl<T: StaticReflect> TypeId<*mut T> {
     /// The target of the pointer type
     ///
     /// NOTE: This relies on static typing information
     #[inline]
-    pub const fn pointer_target(self) -> TypeId<'a, T> {
+    pub const fn pointer_target(self) -> TypeId<T> {
         TypeId::get()
     }
 }
-impl<'tp> From<&'tp TypeInfo<'tp>> for TypeId<'tp> {
+impl<T: StaticReflect> From<&'static TypeInfo> for TypeId<T> {
     #[inline]
-    fn from(static_type: &'tp TypeInfo<'tp>) -> Self {
-        TypeId::from_ref(static_type)
+    fn from(static_type: &'static TypeInfo) -> Self {
+        TypeId::from_static(static_type)
     }
 }
-impl<T: StaticReflect> Display for TypeId<'_, T> {
+impl<T: StaticReflect> Display for TypeId<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         Display::fmt(&self.value, f)
     }
 }
-impl<T: StaticReflect> Debug for TypeId<'_, T> {
+impl<T: StaticReflect> Debug for TypeId<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_tuple("TypeId")
             .field(self.value)
@@ -1051,9 +1022,9 @@ impl<T: StaticReflect> Debug for TypeId<'_, T> {
 
 /// A indexed identifier of a field
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct FieldId<'a> {
+pub struct FieldId {
     /// The owner of the field
-    pub owner: TypeId<'a>,
+    pub owner: TypeId,
     /// The index of the field
     pub index: usize,
 }

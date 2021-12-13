@@ -7,10 +7,18 @@ license = "MIT"
 repository = "https://github.com/DuckLogic/rust-static-reflect"
 readme = "README.md"
 
-[dependencies]
-# Optional: Support for zerogc
-zerogc = { version = "0.2.0-alpha.4", optional = true }
-zerogc-derive = { version = "0.2.0-alpha.4", optional = true }
+
+[dependencies.zerogc]
+version = "0.2.0-alpha.5"
+git = "https://github.com/DuckLogic/zerogc"
+branch = "master"
+optional = true
+
+[dependencies.zerogc-derive]
+version = "0.2.0-alpha.5"
+git = "https://github.com/DuckLogic/zerogc"
+branch = "master"
+optional = true
 
 [features]
 default = ["never", "builtins"]

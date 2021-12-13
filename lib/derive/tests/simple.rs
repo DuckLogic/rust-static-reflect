@@ -47,7 +47,7 @@ union SimpleUnion {
 
 #[test]
 fn test_union_types() {
-    const EXPECTED_UNION: TypeInfo<'static> = TypeInfo::UntaggedUnion(&UntaggedUnionDef {
+    const EXPECTED_UNION: TypeInfo = TypeInfo::UntaggedUnion(&UntaggedUnionDef {
         name: "SimpleUnion",
         fields: &[
             SimpleUnion::NAMED_FIELD_INFO.text.erase(),
@@ -83,7 +83,7 @@ fn test_union_types() {
 
 #[test]
 fn test_struct_types() {
-    const NESTED_TYPE: TypeInfo<'static> = TypeInfo::Structure(&StructureDef {
+    const NESTED_TYPE: TypeInfo = TypeInfo::Structure(&StructureDef {
         name: "Nested",
         fields: &[
             Nested::NAMED_FIELD_INFO.cycle.erase(),
@@ -276,7 +276,7 @@ struct OpaqueArray {
 
 #[test]
 fn test_options() {
-    const OPAQUE_ARRAY_TYPE: TypeInfo<'static> = TypeInfo::Structure(&StructureDef {
+    const OPAQUE_ARRAY_TYPE: TypeInfo = TypeInfo::Structure(&StructureDef {
         name: "OpaqueArray",
         fields: &[
             OpaqueArray::NAMED_FIELD_INFO.first.erase(),

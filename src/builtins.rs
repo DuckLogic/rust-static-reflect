@@ -6,7 +6,7 @@ use std::mem::MaybeUninit;
 use crate::{StaticReflect, field_offset, TypeInfo};
 
 #[cfg(feature = "gc")]
-use zerogc_derive::Trace;
+use zerogc_derive::NullTrace;
 
 /// A FFi-safe slice type (`&[T]`)
 /// 
@@ -47,7 +47,7 @@ impl<'a, T: 'a> From<&'a [T]> for AsmSlice<T> {
     }
 }
 unsafe impl<T: StaticReflect> StaticReflect for AsmSlice<T> {
-    const TYPE_INFO: TypeInfo<'static> = TypeInfo::Slice {
+    const TYPE_INFO: TypeInfo = TypeInfo::Slice {
         element_type: &T::TYPE_INFO
     };
 }
@@ -66,8 +66,7 @@ unsafe impl<T: Sync> Send for AsmSlice<T> {}
 /// and this type does not maintain any invariants.
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "gc", derive(Trace))]
-#[cfg_attr(feature = "gc", zerogc(nop_trace, copy))]
+#[cfg_attr(feature = "gc", derive(NullTrace))]
 pub struct AsmStr {
     /// The underlying memory of the string
     #[cfg_attr(feature = "gc", zerogc(unsafe_skip_trace))]
@@ -91,7 +90,7 @@ impl AsmStr {
     }
 }
 unsafe impl StaticReflect for AsmStr {
-    const TYPE_INFO: TypeInfo<'static> = TypeInfo::Str;
+    const TYPE_INFO: TypeInfo = TypeInfo::Str;
 }
 impl<'a> From<&'a str> for AsmStr {
     fn from(s: &'a str) -> AsmStr {
@@ -133,7 +132,7 @@ impl AsmOption<()> {
     ///
     /// This should be equal to the type's alignment
     #[inline]
-    pub const fn value_field_offset(element_type: &TypeInfo<'_>) -> usize {
+    pub const fn value_field_offset(element_type: &TypeInfo) -> usize {
         element_type.alignment()
     }
 }
@@ -185,7 +184,7 @@ impl<T> From<Option<T>> for AsmOption<T> {
     }
 }
 unsafe impl<T: StaticReflect> StaticReflect for AsmOption<T> {
-    const TYPE_INFO: TypeInfo<'static> = TypeInfo::Optional(&T::TYPE_INFO);
+    const TYPE_INFO: TypeInfo = TypeInfo::Optional(&T::TYPE_INFO);
 }
 
 /// This is an owned value, so it's safe to send

@@ -55,7 +55,7 @@ use std::ops::{Sub, Mul, Add};
 /// form of FFI safety.
 pub unsafe trait StaticReflect {
     /// The static information about the type's representation
-    const TYPE_INFO: TypeInfo<'static>;
+    const TYPE_INFO: TypeInfo;
 }
 
 /// A primitive integer type
@@ -99,8 +99,8 @@ pub unsafe trait FieldReflect: StaticReflect {
     /// }
     /// // would generate ->
     /// struct ExampleNamedFields {
-    ///     first: FieldDef<'static>,
-    ///     second: FieldDef<'static>
+    ///     first: FieldDef,
+    ///     second: FieldDef
     /// }
     /// ````
     ///
@@ -111,7 +111,7 @@ pub unsafe trait FieldReflect: StaticReflect {
     /// # use static_reflect::types::FieldDef;
     /// struct Example(u32, String);
     /// // would generate ->
-    /// struct ExampleNamedFields(FieldDef<'static>, FieldDef<'static>);
+    /// struct ExampleNamedFields(FieldDef, FieldDef);
     /// ````
     type NamedFieldInfo;
     /// Static information on this structure's fields.
