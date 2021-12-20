@@ -1,6 +1,6 @@
 [package]
 name = "static-reflect"
-version = "0.2.0-alpha.5"
+version = "0.2.0-alpha.6"
 edition = "2018"
 description = "Static type information, giving a form of compile-time reflection"
 license = "MIT"
@@ -9,15 +9,11 @@ readme = "README.md"
 
 
 [dependencies.zerogc]
-version = "0.2.0-alpha.5"
-git = "https://github.com/DuckLogic/zerogc"
-branch = "master"
+version = "0.2.0-alpha.6"
 optional = true
 
 [dependencies.zerogc-derive]
-version = "0.2.0-alpha.5"
-git = "https://github.com/DuckLogic/zerogc"
-branch = "master"
+version = "0.2.0-alpha.6"
 optional = true
 
 [features]
