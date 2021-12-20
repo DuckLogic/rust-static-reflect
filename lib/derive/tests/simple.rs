@@ -1,10 +1,12 @@
 #![feature(
     never_type,
+    inline_const,
+    const_ptr_offset_from,
 )]
 use pretty_assertions::assert_eq;
 
 use static_reflect::{field_offset, StaticReflect, FieldReflect};
-use static_reflect::types::{TypeInfo, FieldDef, StructureDef, UntaggedUnionDef, UnionFieldDef, TypeId, CStyleEnumVariant, CStyleEnumDef, DiscriminantValue, IntType};
+use static_reflect::types::{TypeInfo, FieldDef, StructureDef, TypeId, CStyleEnumVariant, CStyleEnumDef, DiscriminantValue, IntType};
 use std::mem::{size_of, align_of};
 
 use static_reflect_derive::{StaticReflect};
@@ -29,61 +31,9 @@ pub struct SimpleStruct {
     nested_struct: Nested
 }
 
-fn leak_vec<T>(elements: Vec<T>) -> &'static [T] {
-    let ptr = elements.as_ptr();
-    let len = elements.len();
-    std::mem::forget(elements);
-    unsafe { std::slice::from_raw_parts(ptr, len) }
-}
-
-#[repr(C)]
-#[derive(StaticReflect)]
-union SimpleUnion {
-    pub text: *mut String,
-    b: bool,
-    f: f32,
-    nested: Nested
-}
-
-#[test]
-fn test_union_types() {
-    const EXPECTED_UNION: TypeInfo = TypeInfo::UntaggedUnion(&UntaggedUnionDef {
-        name: "SimpleUnion",
-        fields: &[
-            SimpleUnion::NAMED_FIELD_INFO.text.erase(),
-            SimpleUnion::NAMED_FIELD_INFO.b.erase(),
-            SimpleUnion::NAMED_FIELD_INFO.f.erase(),
-            SimpleUnion::NAMED_FIELD_INFO.nested.erase(),
-        ],
-        size: size_of::<SimpleUnion>(),
-        alignment: align_of::<SimpleUnion>()
-    });
-    assert_eq!(EXPECTED_UNION, SimpleUnion::TYPE_INFO);
-    assert_eq!(SimpleUnion::NAMED_FIELD_INFO.text, UnionFieldDef {
-        name: "text",
-        value_type: TypeId::<*mut String>::get(),
-        index: 0
-    });
-    assert_eq!(SimpleUnion::NAMED_FIELD_INFO.b, UnionFieldDef {
-        name: "b",
-        value_type: TypeId::<bool>::get(),
-        index: 1
-    });
-    assert_eq!(SimpleUnion::NAMED_FIELD_INFO.f, UnionFieldDef {
-        name: "f",
-        value_type: TypeId::<f32>::get(),
-        index: 2
-    });
-    assert_eq!(SimpleUnion::NAMED_FIELD_INFO.nested, UnionFieldDef {
-        name: "nested",
-        value_type: TypeId::<Nested>::get(),
-        index: 3
-    });
-}
-
 #[test]
 fn test_struct_types() {
-    const NESTED_TYPE: TypeInfo = TypeInfo::Structure(&StructureDef {
+    const NESTED_TYPE: TypeInfo = TypeInfo::Structure(&const { StructureDef {
         name: "Nested",
         fields: &[
             Nested::NAMED_FIELD_INFO.cycle.erase(),
@@ -92,7 +42,7 @@ fn test_struct_types() {
         ],
         size: size_of::<Nested>(),
         alignment: align_of::<Nested>()
-    });
+    } });
     assert_eq!(Nested::TYPE_INFO, NESTED_TYPE);
     assert_eq!(Nested::NAMED_FIELD_INFO.cycle, FieldDef {
         name: Some("cycle"),
@@ -112,7 +62,7 @@ fn test_struct_types() {
         offset: field_offset!(Nested, number),
         index: 2
     });
-    let fields = vec![
+    const FIELDS: &[FieldDef] = &[
         FieldDef {
             name: Some("text"),
             value_type: TypeId::erased::<*mut String>(),
@@ -151,15 +101,14 @@ fn test_struct_types() {
             index: 5
         },
     ];
-    let static_fields = leak_vec(fields);
     assert_eq!(
         SimpleStruct::TYPE_INFO,
-        TypeInfo::Structure(&StructureDef {
+        TypeInfo::Structure(&const { StructureDef {
             name: "SimpleStruct",
-            fields: static_fields,
+            fields: FIELDS,
             size: size_of::<SimpleStruct>(),
             alignment: align_of::<SimpleStruct>(),
-        })
+        } })
     );
 }
 
@@ -170,7 +119,7 @@ struct SimpleTupleStruct(*mut String, f32, Nested);
 
 #[test]
 fn test_tuple_struct() {
-    let fields = vec![
+    const FIELDS: &[FieldDef] = &[
         FieldDef {
             name: None,
             value_type: TypeId::erased::<*mut String>(),
@@ -191,15 +140,14 @@ fn test_tuple_struct() {
             index: 2
         },
     ];
-    assert_eq!(SimpleTupleStruct::NAMED_FIELD_INFO.0.erase(), fields[0]);
-    assert_eq!(SimpleTupleStruct::NAMED_FIELD_INFO.1.erase(), fields[1]);
-    assert_eq!(SimpleTupleStruct::NAMED_FIELD_INFO.2.erase(), fields[2]);
-    let static_fields = leak_vec(fields);
+    assert_eq!(SimpleTupleStruct::NAMED_FIELD_INFO.0.erase(), FIELDS[0]);
+    assert_eq!(SimpleTupleStruct::NAMED_FIELD_INFO.1.erase(), FIELDS[1]);
+    assert_eq!(SimpleTupleStruct::NAMED_FIELD_INFO.2.erase(), FIELDS[2]);
     assert_eq!(
         SimpleTupleStruct::TYPE_INFO,
         TypeInfo::Structure(&StructureDef {
             name: "SimpleTupleStruct",
-            fields: static_fields,
+            fields: FIELDS,
             size: size_of::<SimpleTupleStruct>(),
             alignment: align_of::<SimpleTupleStruct>(),
         })
