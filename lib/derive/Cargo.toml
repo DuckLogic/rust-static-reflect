@@ -1,7 +1,7 @@
 [package]
 name = "static-reflect-derive"
 description = "Procedural derive for static-reflect"
-version = "0.2.0-alpha.7"
+version = "0.2.0-alpha.8"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/DuckLogic/rust-static-reflect"
@@ -21,5 +21,5 @@ features = ["full", "extra-traits"]
 
 [dev-dependencies]
 # Testing
-static-reflect = { version = "0.2.0-alpha.7", path = "../.." }
+static-reflect = { version = "0.2.0-alpha.8", path = "../.." }
 pretty_assertions = "1.4"
