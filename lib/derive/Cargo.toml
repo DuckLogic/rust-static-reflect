@@ -2,7 +2,7 @@
 name = "static-reflect-derive"
 description = "Procedural derive for static-reflect"
 version = "0.2.0-alpha.6"
-edition = "2018"
+edition = "2021"
 license = "MIT"
 repository = "https://github.com/DuckLogic/rust-static-reflect"
 
