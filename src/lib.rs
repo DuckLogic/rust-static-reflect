@@ -28,6 +28,9 @@ pub use crate::types::TypeInfo;
 use crate::types::{FloatSize, IntSize, IntType};
 use std::ops::{Add, Mul, Sub};
 
+#[cfg(feature = "derive")]
+pub use static_reflect_derive::{reflect_func, StaticReflect};
+
 /// The trait for types whose information can be accessed via static reflection.
 ///
 /// In order to proper access any fields,

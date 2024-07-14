@@ -7,13 +7,17 @@ license = "MIT"
 repository = "https://github.com/DuckLogic/rust-static-reflect"
 readme = "README.md"
 
+[dependencies]
+static-reflect-derive = { version = "0.2.0-alpha.7", path = "lib/derive", optional = true }
 
 [features]
-default = ["never", "builtins"]
+default = ["never", "builtins", "derive"]
 # Support using the never type
 never = []
 # Support the 'builtin' alternative to stdlib types
 builtins = []
+# Procedural derive
+derive = ["dep:static-reflect-derive"]
 
 [workspace]
 members = ["lib/*"]

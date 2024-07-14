@@ -1,8 +1,7 @@
+use std::mem::{align_of, size_of};
+
 use static_reflect::types::{TypeId, TypeInfo, UnionFieldDef, UntaggedUnionDef};
 use static_reflect::{FieldReflect, StaticReflect};
-use static_reflect_derive::StaticReflect;
-
-use std::mem::{align_of, size_of};
 
 #[derive(Copy, Clone, Debug, PartialEq, StaticReflect)]
 #[repr(C)]

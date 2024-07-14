@@ -1,4 +1,6 @@
 #![feature(never_type)]
+use std::mem::{align_of, size_of};
+
 use pretty_assertions::assert_eq;
 
 use static_reflect::types::{
@@ -6,9 +8,6 @@ use static_reflect::types::{
     TypeInfo,
 };
 use static_reflect::{field_offset, FieldReflect, StaticReflect};
-use std::mem::{align_of, size_of};
-
-use static_reflect_derive::StaticReflect;
 
 #[derive(Copy, Clone, Debug, PartialEq, StaticReflect)]
 #[repr(C)]

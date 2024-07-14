@@ -1,10 +1,9 @@
+use std::marker::PhantomData;
 use std::os::raw::c_void;
 
 use static_reflect::funcs::{FunctionDeclaration, FunctionLocation, SignatureDef};
 use static_reflect::types::{FloatSize, TypeInfo};
-use static_reflect::StaticReflect;
-use static_reflect_derive::reflect_func;
-use std::marker::PhantomData;
+use static_reflect::{reflect_func, StaticReflect};
 
 #[reflect_func]
 #[export_name = "better_name"]
