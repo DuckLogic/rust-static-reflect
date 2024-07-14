@@ -5,9 +5,6 @@ use std::cmp::Ordering;
 use std::marker::PhantomData;
 use std::fmt::{self, Formatter, Display, Debug, Write};
 
-#[cfg(feature = "gc")]
-use zerogc_derive::NullTrace;
-
 #[cfg(feature = "builtins")]
 use crate::builtins::{AsmSlice, AsmStr};
 use std::alloc::Layout;
@@ -30,7 +27,6 @@ pub unsafe trait SimpleNonZeroRepr: StaticReflect {}
 /// For example, the C standard technically allows 16-bit ints
 /// or 32-bit longs.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
-#[cfg_attr(feature="gc", derive(NullTrace))]
 #[repr(u8)]
 pub enum IntSize {
     /// A single byte (`u8`)
@@ -127,7 +123,6 @@ impl std::error::Error for InvalidSizeErr {}
 /// The size of a floating point number,
 /// either single-precision or double-precision
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
-#[cfg_attr(feature="gc", derive(NullTrace))]
 pub enum FloatSize {
     /// A single-precision floating point number.
     ///
@@ -170,7 +165,6 @@ impl Default for FloatSize {
 
 /// An integer type
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-#[cfg_attr(feature="gc", derive(NullTrace))]
 pub struct IntType {
     /// The size of this integer
     pub size: IntSize,
@@ -320,7 +314,6 @@ impl Display for IntType {
 /// The `second` field is naturally aligned, making the whole `EfficientRepr` only `4` bytes,
 /// in contrast to the 5-byte representation of `TraditionalRepr`.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-#[cfg_attr(feature="gc", derive(NullTrace))]
 pub enum TaggedUnionStyle {
     /// The ["traditional" representation](https://doc.rust-lang.org/nightly/reference/type-layout.html#reprc-enums-with-fields),
     /// which is specified by `#[repr(C)]`
@@ -382,7 +375,6 @@ impl Default for TaggedUnionStyle {
 /// However, they can be allocated at runtime,
 /// and potentially live for a more limited lifetime.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-#[cfg_attr(feature="gc", derive(NullTrace))]
 pub enum TypeInfo {
     /// The zero-length unit type `()`
     ///
@@ -551,7 +543,6 @@ impl Display for TypeInfo {
 }
 /// Static information on the definition of a structure
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-#[cfg_attr(feature="gc", derive(NullTrace))]
 pub struct StructureDef {
     /// The name of the structure
     pub name: &'static str,
@@ -571,8 +562,6 @@ impl<T: StaticReflect> Clone for FieldDef<T> {
 }
 /// The definition of a field
 #[derive(Debug, Eq, PartialEq, Hash)]
-#[cfg_attr(feature="gc", derive(NullTrace))]
-#[cfg_attr(feature="gc",zerogc(ignore_params(T)))]
 pub struct FieldDef<T: StaticReflect = ()> {
     /// The name of the field, or `None` if this is a tuple struct
     pub name: Option<&'static str>,
@@ -606,7 +595,6 @@ impl<T: StaticReflect> FieldDef<T> {
 ///
 /// The variants of a C-style enum may not have any data.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-#[cfg_attr(feature="gc", derive(NullTrace))]
 pub struct CStyleEnumDef {
     /// The name of the enumeration
     pub name: &'static str,
@@ -630,7 +618,6 @@ impl CStyleEnumDef {
 }
 /// A variant in a C-style enum (a Rust enum without any data)
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-#[cfg_attr(feature="gc", derive(NullTrace))]
 pub struct CStyleEnumVariant {
     /// The index of this variant, specifying the declaration order
     pub index: usize,
@@ -641,7 +628,6 @@ pub struct CStyleEnumVariant {
 }
 /// The value of the discriminant
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-#[cfg_attr(feature="gc", derive(NullTrace))]
 pub enum DiscriminantValue {
     /// The discriminant has the default value,
     /// which is implicitly equal to its declaration order.
@@ -691,7 +677,6 @@ impl DiscriminantValue {
 ///
 /// These are just FFI-compatible Rust enums annotated with `#[repr(C)]`.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-#[cfg_attr(feature="gc", derive(NullTrace))]
 pub struct TaggedUnionDef {
     /// The name of the enum type
     pub name: &'static str,
@@ -717,7 +702,6 @@ pub struct TaggedUnionDef {
 /// This mostly functions as a wrapper around a [StructureDef],
 /// which stores information on the variant's fields (and whether or
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-#[cfg_attr(feature="gc", derive(NullTrace))]
 pub struct TaggedUnionVariant {
     /// The index of this variant, determining the declaration order
     pub index: usize,
@@ -737,7 +721,6 @@ impl TaggedUnionVariant {
 }
 /// The definition of an untagged union which is known at compile-time
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-#[cfg_attr(feature="gc", derive(NullTrace))]
 pub struct UntaggedUnionDef {
     /// The name of the union
     pub name: &'static str,
@@ -756,8 +739,6 @@ pub struct UntaggedUnionDef {
 
 /// A field of a union which is known at compile-time
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-#[cfg_attr(feature="gc", derive(NullTrace))]
-#[cfg_attr(feature="gc",zerogc(ignore_params(T)))]
 pub struct UnionFieldDef<T: StaticReflect = ()> {
     /// The name of the field
     pub name: &'static str,
@@ -793,7 +774,6 @@ impl<T: StaticReflect> UnionFieldDef<T> {
 /// Although rust doesn't truly have a concept of 'primitives',
 /// these are the most basic types needed to construct all the others.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature="gc", derive(NullTrace))]
 pub enum PrimitiveType {
     /// The zero-length type '()'
     ///
@@ -891,8 +871,6 @@ impl<T: StaticReflect> Clone for TypeId<T> {
 
 /// An static reference to a type
 #[derive(Eq, PartialEq, Hash)]
-#[cfg_attr(feature="gc", derive(NullTrace))]
-#[cfg_attr(feature="gc",zerogc(ignore_params(T)))]
 pub struct TypeId<T: StaticReflect = ()> {
     value: &'static TypeInfo,
     marker: PhantomData<fn() -> T>

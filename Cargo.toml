@@ -8,23 +8,12 @@ repository = "https://github.com/DuckLogic/rust-static-reflect"
 readme = "README.md"
 
 
-[dependencies.zerogc]
-version = "0.2.0-alpha.6"
-optional = true
-
-[dependencies.zerogc-derive]
-version = "0.2.0-alpha.6"
-optional = true
-
 [features]
 default = ["never", "builtins"]
 # Support using the never type
 never = []
 # Support the 'builtin' alternative to stdlib types
 builtins = []
-# Support for garbage collection
-gc = ["zerogc", "zerogc-derive"]
-
 
 [workspace]
 members = ["lib/*"]
