@@ -16,6 +16,7 @@ extern "C" fn stupid_name(first: f32, second: f32) {
 #[reflect_func]
 unsafe extern "C" fn dynamically_linked(first: u32, second: *mut String) -> f32 {
     eprintln!("Test {}: {}", first, &*second);
+    #[allow(clippy::approx_constant)]
     3.14
 }
 
@@ -62,7 +63,7 @@ fn extern_block() {
         FunctionDeclaration::<f32, (f32,)> {
             name: "sqrt",
             is_unsafe: true, // NOTE: Foreign function
-            location: Some(FunctionLocation::DynamicallyLinked { link_name: Some("sqrtf".into()) }),
+            location: Some(FunctionLocation::DynamicallyLinked { link_name: Some("sqrtf") }),
             signature: SignatureDef {
                 argument_types: &[f32::TYPE_INFO],
                 return_type: &f32::TYPE_INFO,
@@ -98,7 +99,7 @@ fn rust_funcs() {
         FunctionDeclaration::<(), (f32, f32)> {
             name: "stupid_name",
             is_unsafe: false,
-            location: Some(FunctionLocation::DynamicallyLinked { link_name: Some("better_name".into()) }),
+            location: Some(FunctionLocation::DynamicallyLinked { link_name: Some("better_name") }),
             signature: SignatureDef {
                 argument_types: &[f32::TYPE_INFO, TypeInfo::Float { size: FloatSize::Single }],
                 return_type: &TypeInfo::Unit,

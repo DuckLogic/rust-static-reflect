@@ -122,7 +122,7 @@ fn handle_fn_def(item: &ItemFn, args: FuncArgs) -> Result<TokenStream, syn::Erro
         let name = &item.sig.ident;
         FunctionLocation::AbsoluteAddress(quote!({ #name as *const () }))
     } else {
-        let name = determine_fn_link_name(&item)?;
+        let name = determine_fn_link_name(item)?;
         FunctionLocation::DynamicallyLinked {
             link_name: name.map(|s| quote!(#s))
         }
@@ -206,7 +206,7 @@ fn handle_foreign_mod(item: &ItemForeignMod, default_args: FuncArgs) -> Result<T
         }
     }
     let function_def_consts = result_static_defs.iter()
-        .map(|&(ref def, ref verify_types)| def.make_constant(&verify_types))
+        .map(|(def, verify_types)| def.make_constant(verify_types))
         .collect_vec();
     Ok(quote! {
         #(#function_def_consts)*

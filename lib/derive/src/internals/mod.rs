@@ -50,7 +50,7 @@ pub fn determine_repr(input: &DeriveInput) -> Result<Option<Repr>, syn::Error> {
 }
 
 pub fn derive_reflect_func(args: FuncArgs, input: &Item) -> Result<TokenStream, ::syn::Error> {
-    let result = self::func::handle_item(&input, args)?;
+    let result = self::func::handle_item(input, args)?;
 
     self::utils::debug_proc_macro("reflect_func", &self::utils::item_name(input), &result);
 

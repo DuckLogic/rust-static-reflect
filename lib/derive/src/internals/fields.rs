@@ -74,6 +74,7 @@ impl DeriveFieldOptions {
         Ok(result.unwrap_or_else(DeriveFieldOptions::default))
     }
 }
+#[allow(clippy::derivable_impls)]
 impl Default for DeriveFieldOptions {
     fn default() -> DeriveFieldOptions {
         DeriveFieldOptions {
@@ -87,7 +88,7 @@ impl Default for DeriveFieldOptions {
 
 pub fn derive_static_reflect(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
     let name = &input.ident;
-    let repr = determine_repr(&input)?;
+    let repr = determine_repr(input)?;
     if repr != Some(Repr::C) && !matches!(input.data, Data::Enum(_)) {
         return Err(syn::Error::new(
             name.span(),
@@ -103,18 +104,18 @@ pub fn derive_static_reflect(input: &DeriveInput) -> Result<TokenStream, syn::Er
         Data::Struct(ref data) => {
             handle_type(
                 StructHandler::new(data, name),
-                &name,
+                name,
                 quote!(#impl_generics),
                 quote!(#ty_generics),
                 quote!(#where_clause),
                 &mut extra_defs
             )?
         },
-        Data::Enum(ref data) => enum_static_type(data, repr, &name)?,
+        Data::Enum(ref data) => enum_static_type(data, repr, name)?,
         Data::Union(ref data) => {
             handle_type(
                 UnionTypeHandler { data, name },
-                &name,
+                name,
                 quote!(#impl_generics),
                 quote!(#ty_generics),
                 quote!(#where_clause),

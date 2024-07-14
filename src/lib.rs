@@ -55,6 +55,11 @@ pub unsafe trait StaticReflect {
 }
 
 /// A primitive integer type
+///
+/// ## Safety
+/// Must actually be one of the primitive integer types.
+///
+/// Trait info must accurately reflect the underlying type.
 pub unsafe trait PrimInt: StaticReflect + Copy + Add<Self> + Sub<Self> + Mul<Self> + sealed::Sealed {
     /// The [IntType] of this integer
     const INT_TYPE: IntType;
@@ -67,6 +72,11 @@ pub unsafe trait PrimInt: StaticReflect + Copy + Add<Self> + Sub<Self> + Mul<Sel
     const INT_SIZE: IntSize;
 }
 /// A primitive float type
+///
+/// ## Safety
+/// Must actually be one of the primitive float types.
+///
+/// Trait info must accurately reflect the underlying type.
 pub unsafe trait PrimFloat: StaticReflect + Copy + sealed::Sealed {
     /// The size of this float
     const FLOAT_SIZE: FloatSize;

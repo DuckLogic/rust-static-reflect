@@ -17,7 +17,12 @@ use std::alloc::Layout;
 /// A type which is never zero, and where optional types
 /// are guaranteed to use the null-pointer representation
 ///
-/// If `T: SimpleNonZeroPointer` -> `sizeof(Option<T>) == sizeof(T) && repr(Option<T>) == repr(T)`
+/// If `T: SimpleNonZeroRepr` -> `sizeof(Option<T>) == sizeof(T) && repr(Option<T>) == repr(T)`
+///
+/// ## Safety
+/// Zero must never be a valid value for this type.
+///
+/// Requires that` Option<Self>` has same representation as `Self`.
 pub unsafe trait SimpleNonZeroRepr: StaticReflect {}
 
 /// An integer size, named in the style of C/Java
@@ -341,7 +346,7 @@ impl TaggedUnionStyle {
     ///
     /// Panics if the enum is uninhabited, or an error occurs calculating the combined layouts..
     pub fn compute_layout(&self, discriminant_size: Layout, variant_layouts: impl Iterator<Item=Layout>) -> Layout {
-        let mut starting_layout = discriminant_size.clone();
+        let mut starting_layout = discriminant_size;
         match *self {
             TaggedUnionStyle::Traditional => {
                 /*
@@ -488,12 +493,12 @@ impl TypeInfo {
             #[cfg(feature = "builtins")]
             Slice { .. } => std::mem::size_of::<AsmSlice<()>>(),
             #[cfg(feature = "builtins")]
-            Optional(ref _inner) => unimplemented!(),
+            Optional(_inner) => unimplemented!(),
             Pointer => size_of::<*const ()>(),
             #[cfg(feature = "builtins")]
             Str => size_of::<AsmStr>(),
-            Structure(ref def) => def.size,
-            UntaggedUnion(ref def) => def.size,
+            Structure(def) => def.size,
+            UntaggedUnion(def) => def.size,
             TaggedUnion(def) => def.size,
             CStyleEnum(def) => def.discriminant.size.bytes(),
             // Provide a dummy value
@@ -536,10 +541,10 @@ impl Display for TypeInfo {
             TypeInfo::Str => f.write_str("str"),
             TypeInfo::Optional(inner_type) => write!(f, "Option<{}>", inner_type),
             TypeInfo::Pointer => f.write_str("*mut void"),
-            TypeInfo::Structure(ref def) => f.write_str(def.name),
-            TypeInfo::UntaggedUnion(ref def) => f.write_str(def.name),
-            TypeInfo::CStyleEnum(ref def) => f.write_str(def.name),
-            TypeInfo::TaggedUnion(ref def) => f.write_str(def.name),
+            TypeInfo::Structure(def) => f.write_str(def.name),
+            TypeInfo::UntaggedUnion(def) => f.write_str(def.name),
+            TypeInfo::CStyleEnum(def) => f.write_str(def.name),
+            TypeInfo::TaggedUnion(def) => f.write_str(def.name),
             TypeInfo::Extern { name } => write!(f, "extern {}", name),
             TypeInfo::Magic { id, extra: None } => write!(f, "magic::{}", id),
             TypeInfo::Magic { id, extra: Some(extra) } => write!(f, "magic::{}<{}>", id, extra)
@@ -846,7 +851,7 @@ impl PrimitiveType {
             PrimitiveType::Float { size } => size.bytes(),
             PrimitiveType::Pointer => {
                 assert_eq!(std::mem::size_of::<usize>(), std::mem::size_of::<*mut ()>());
-                std::mem::size_of::<*mut ()>() as usize
+                std::mem::size_of::<*mut ()>()
             },
             PrimitiveType::Bool => {
                 assert_eq!(std::mem::size_of::<bool>(), 1);
@@ -857,7 +862,7 @@ impl PrimitiveType {
     /// The size of this type, in bytes
     #[inline]
     pub fn size(self) -> usize {
-        self.bytes() as usize
+        self.bytes()
     }
 }
 /// Compare two primitive types based on their sizes
