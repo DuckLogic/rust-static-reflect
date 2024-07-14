@@ -1,8 +1,6 @@
 //! The static type system
 use crate::{StaticReflect, FieldReflect, PrimInt, PrimFloat};
 
-#[cfg(feature = "num")]
-pub use self::num::{PrimNum, PrimValue};
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 use std::fmt::{self, Formatter, Display, Debug, Write};
