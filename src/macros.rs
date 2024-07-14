@@ -18,6 +18,8 @@ macro_rules! define_extern_type {
 /// This is only well defined for `#[repr(C)]` types,
 /// since `#[repr(Rust)]` types don't have a well-defined layout.
 ///
+/// Consider using [`std::mem::offset_of`] instead.
+///
 /// ## Examples
 /// ````
 /// # use static_reflect::field_offset;
