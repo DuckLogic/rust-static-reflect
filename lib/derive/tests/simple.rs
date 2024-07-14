@@ -1,7 +1,5 @@
 #![feature(
     never_type,
-    inline_const,
-    const_ptr_offset_from,
 )]
 use pretty_assertions::assert_eq;
 

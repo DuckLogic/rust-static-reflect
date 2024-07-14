@@ -1,4 +1,4 @@
-use syn::{Error, FnArg, ReturnType, ForeignItem, Attribute, ItemFn, Meta, ItemForeignMod, Item, Lit, Type};
+use syn::{Error, FnArg, ReturnType, ForeignItem, Attribute, ItemFn, Meta, ItemForeignMod, Item, Lit, Type, Expr};
 use syn::parse::{self, Parse, ParseStream};
 use proc_macro2::{Ident, TokenStream, Span};
 use quote::{ToTokens, TokenStreamExt};
@@ -57,26 +57,26 @@ struct FunctionDefOpts {
 
 /// Ensure that the function is either marked `#[no_mangle]`
 /// or that it has a custom `#[export_name]`
-fn determine_fn_link_name(item: &ItemFn) -> Result<Option<String>, syn::Error> {
+fn determine_fn_link_name(item: &ItemFn) -> Result<Option<String>, Error> {
     for attr in &item.attrs {
-        match attr.parse_meta()? {
+        match attr.meta {
             Meta::Path(ref p) if p.is_ident("no_mangle") => {
                 return Ok(None)
             },
             Meta::NameValue(ref item) if item.path.is_ident("export_name") => {
-                match item.lit {
-                    Lit::Str(ref s) => {
-                        return Ok(Some(s.value()))
+                return match item.value {
+                    Expr::Lit(syn::ExprLit { lit: Lit::Str(ref s), .. }) => {
+                        Ok(Some(s.value()))
                     },
                     _ => {
-                        return Err(syn::Error::new(item.span(), "Expected a string for export_name"))
+                        Err(Error::new(item.span(), "Expected a string for export_name"))
                     }
                 }
             },
             _ => {}
         }
     }
-    Err(syn::Error::new(
+    Err(Error::new(
         item.span(),
         "Function must be #[no_mangle] to support dynamic linking"
     ))
@@ -84,14 +84,14 @@ fn determine_fn_link_name(item: &ItemFn) -> Result<Option<String>, syn::Error> {
 
 fn determine_foreign_link_name(attrs: &[Attribute]) -> Result<Option<String>, syn::Error> {
     for attr in attrs {
-        match attr.parse_meta()? {
+        match attr.meta {
             Meta::NameValue(ref l) if l.path.is_ident("link_name") => {
-                match l.lit {
-                    Lit::Str(ref s) => {
-                        return Ok(Some(s.value()))
+                return match l.value {
+                    Expr::Lit(syn::ExprLit { lit: Lit::Str(ref s), .. }) => {
+                        Ok(Some(s.value()))
                     },
                     _ => {
-                        return Err(syn::Error::new(
+                        Err(syn::Error::new(
                             l.span(),
                             "Expected a string for #[link_name]"
                         ))
@@ -109,7 +109,7 @@ pub fn handle_item(item: &Item, args: FuncArgs) -> Result<TokenStream, syn::Erro
         Item::Fn(ref func) => handle_fn_def(func, args),
         Item::ForeignMod(ref foreign_mod) => handle_foreign_mod(foreign_mod, args),
         _ => {
-            Err(syn::Error::new(
+            Err(Error::new(
                 item.span(),
                 format!("Invalid target for #[{}]", FUNC_ATTR_NAME)
             ))
@@ -161,19 +161,28 @@ fn handle_foreign_mod(item: &ItemForeignMod, default_args: FuncArgs) -> Result<T
             ForeignItem::Fn(ref item) => {
                 let mut result_item = (*item).clone();
                 result_item.attrs.clear();
+                let mut override_args =None;
                 for attr in &item.attrs {
-                    if attr.path.is_ident(FUNC_ATTR_NAME) {
-                        let override_args = syn::parse2::<FuncArgs>(attr.tokens.clone())?;
-                        // Handle overriding args
-                        if override_args.absolute {
-                            return Err(syn::Error::new(
-                                item.span(),
-                                "Absolute locations aren't supported in foreign functions"
-                            ));
-                        }
-                        // NOTE: This is removed from the result_item
+                    if attr.path().is_ident(FUNC_ATTR_NAME) {
+                        // NOTE: This attribute is removed from the result_item
+                        attr.parse_nested_meta(|meta| {
+                            if override_args.is_some() {
+                                return Err(meta.error(format!("Conflicting #[{FUNC_ATTR_NAME}] attributes")));
+                            }
+                            override_args = Some(FuncArgs::parse(meta.input)?);
+                            Ok(())
+                        })?;
                     } else {
                         result_item.attrs.push(attr.clone());
+                    }
+                }
+                // Handle overriding args
+                if let Some(override_args) = override_args {
+                    if override_args.absolute {
+                        return Err(syn::Error::new(
+                            item.span(),
+                            "Absolute locations aren't supported in foreign functions"
+                        ));
                     }
                 }
                 let link_name = determine_foreign_link_name(&item.attrs)?

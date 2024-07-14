@@ -285,7 +285,7 @@ impl Display for IntType {
 /// This avoids any wasted padding bytes, but is slightly harder to use and seems
 /// unexpected if you come from a C/C++ background.
 /// ````no_run
-/// # #![feature(untagged_unions)]
+/// use std::mem::ManuallyDrop;
 /// #[repr(u8)]
 /// enum Efficient {
 ///     One(u8, u16),
@@ -298,8 +298,8 @@ impl Display for IntType {
 /// }
 /// #[repr(C)]
 /// union EfficientRepr {
-///     one: EfficientVariantOne,
-///     two: EfficientVariantTwo
+///     one: ManuallyDrop<EfficientVariantOne>,
+///     two: ManuallyDrop<EfficientVariantTwo>
 /// }
 /// #[repr(C)]
 /// struct EfficientVariantOne {

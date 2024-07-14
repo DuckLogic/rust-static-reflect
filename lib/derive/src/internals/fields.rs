@@ -1,7 +1,6 @@
 use quote::{quote, format_ident};
-use syn::{parenthesized, Token, parse_quote, DeriveInput, Data, Generics, GenericParam, TypeParamBound, DataEnum, DataStruct, DataUnion, Type};
+use syn::{parse_quote, DeriveInput, Data, Generics, GenericParam, TypeParamBound, DataEnum, DataStruct, DataUnion, Type, Error};
 use proc_macro2::{TokenStream, Ident, Span};
-use syn::parse::{self, Parse, ParseStream};
 use syn::spanned::Spanned;
 use indexmap::IndexMap;
 
@@ -35,12 +34,44 @@ pub struct DeriveFieldOptions {
 }
 impl DeriveFieldOptions {
     pub fn parse_attrs(attrs: &[syn::Attribute]) -> Result<DeriveFieldOptions, syn::Error> {
+        let mut result = None;
         for attr in attrs {
-            if attr.path.is_ident("reflect") || attr.path.is_ident("static_reflect") {
-                return syn::parse2(attr.tokens.clone())
+            if attr.path().is_ident("reflect") || attr.path().is_ident("static_reflect") {
+                attr.parse_nested_meta(|meta| {
+                    if result.is_some() {
+                        return Err(meta.error("Conflicting #[reflect(...)] field options"));
+                    }
+                    let mut args = DeriveFieldOptions::default();
+                    if meta.path.is_ident("opaque_array") {
+                        args.opaque_array = true;
+                    } else if meta.path.is_ident("assume_repr") {
+                        let value = meta.value()?;
+                        let type_str = value.parse::<syn::LitStr>()?;
+                        let desired_type = syn::parse_str::<Type>(&type_str.value())
+                            .map_err(|cause| syn::Error::new(
+                                type_str.span(),
+                                format_args!("Invalid type: {}", cause)
+                            ))?;
+                        args.assume_repr = Some(desired_type);
+                    } else {
+                        return Err(Error::new_spanned(
+                            &meta.path,
+                            format_args!("Invalid flag")
+                        ));
+                    }
+                    // validate args
+                    if args.assume_repr.is_some() && args.opaque_array {
+                        return Err(Error::new_spanned(
+                            &meta.path,
+                            "opaque_array is incompatible with assume_repr",
+                        ))
+                    }
+                    result = Some(args);
+                    Ok(())
+                })?;
             }
         }
-        Ok(DeriveFieldOptions::default())
+        Ok(result.unwrap_or_else(DeriveFieldOptions::default))
     }
 }
 impl Default for DeriveFieldOptions {
@@ -51,46 +82,6 @@ impl Default for DeriveFieldOptions {
             // This is unsafe
             assume_repr: None
         }
-    }
-}
-
-impl Parse for DeriveFieldOptions {
-    fn parse(bracketed_input: ParseStream) -> parse::Result<Self> {
-        let mut args = DeriveFieldOptions::default();
-        let input;
-        parenthesized!(input in bracketed_input);
-        let start_span = input.span();
-        while !input.is_empty() {
-            if input.peek(syn::Ident) {
-                let ident = input.parse::<Ident>()?;
-                match &*ident.to_string() {
-                    "opaque_array" => {
-                        args.opaque_array = true;
-                    },
-                    "assume_repr" => {
-                        input.parse::<Token![=]>()?;
-                        let type_str = input.parse::<syn::LitStr>()?;
-                        let desired_type = syn::parse_str::<Type>(&type_str.value())
-                            .map_err(|cause| syn::Error::new(
-                                type_str.span(),
-                                format_args!("Invalid type: {}", cause)
-                            ))?;
-                        args.assume_repr = Some(desired_type);
-                    }
-                    _ => {
-                        return Err(input.error(format_args!("Invalid flag: {}", ident)))
-                    }
-                }
-            } else {
-                return Err(input.error("Unexpected token"))
-            }
-        }
-        if args.assume_repr.is_some() && args.opaque_array {
-            return Err(syn::Error::new(
-                start_span, "opaque_array is incompatible with assume_repr",
-            ))
-        }
-        Ok(args)
     }
 }
 
@@ -478,7 +469,7 @@ impl<'a> TypeHandler<'a> for UnionTypeHandler<'a> {
     fn field_def_type(field_type: Option<TokenStream>) -> TokenStream {
         match field_type {
             None => quote!(static_reflect::types::UnionFieldDef),
-            Some(inner) => quote!(static_reflect::types::UnionFieldDef<'static, #inner>),
+            Some(inner) => quote!(static_reflect::types::UnionFieldDef<#inner>),
         }
     }
 

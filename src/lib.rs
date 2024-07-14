@@ -12,10 +12,6 @@
 #![deny(missing_docs)]
 #![feature(
     const_option, // We use Option::unwrap
-    const_fn_fn_ptr_basics, // We use PhantomData<fn() -> T>
-    const_fn_trait_bound,
-    // Used for field_offset macro
-    const_ptr_offset_from,
 )]
 #![cfg_attr(feature = "never", feature(never_type))]
 

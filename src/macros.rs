@@ -42,7 +42,6 @@ macro_rules! define_extern_type {
 /// Assuming you specify the appropriate feature flags,
 /// this macro can also be used in a const-eval context.
 /// ````
-/// #![feature(const_ptr_offset_from)]
 /// # #![deny(unused_features, stable_features)]
 /// # use static_reflect::field_offset;
 /// struct Example {
