@@ -15,18 +15,18 @@
 )]
 #![cfg_attr(feature = "never", feature(never_type))]
 
-mod macros;
 #[cfg(feature = "builtins")]
 pub mod builtins;
-pub mod types;
 pub mod funcs;
+mod macros;
+pub mod types;
 
 mod core;
 
 pub use crate::types::TypeInfo;
 
-use crate::types::{IntType, IntSize, FloatSize};
-use std::ops::{Sub, Mul, Add};
+use crate::types::{FloatSize, IntSize, IntType};
+use std::ops::{Add, Mul, Sub};
 
 /// The trait for types whose information can be accessed via static reflection.
 ///
@@ -39,14 +39,14 @@ use std::ops::{Sub, Mul, Add};
 /// Incorrect implementation of this trait is considered
 /// undefined behavior. All the static type information must
 /// be correct at runtime.
-/// 
+///
 /// For example, if this type gives field information via [FieldReflect],
 /// then the field information **must** match the representation
 /// at runtime.
-/// 
+///
 /// The advantage of this is that other crates can rely
 /// on the representation being stable (for example, JIT compilers can use it).
-/// 
+///
 /// The type must be `#[repr(C)]` or have some other
 /// form of FFI safety.
 pub unsafe trait StaticReflect {
@@ -60,7 +60,9 @@ pub unsafe trait StaticReflect {
 /// Must actually be one of the primitive integer types.
 ///
 /// Trait info must accurately reflect the underlying type.
-pub unsafe trait PrimInt: StaticReflect + Copy + Add<Self> + Sub<Self> + Mul<Self> + sealed::Sealed {
+pub unsafe trait PrimInt:
+    StaticReflect + Copy + Add<Self> + Sub<Self> + Mul<Self> + sealed::Sealed
+{
     /// The [IntType] of this integer
     const INT_TYPE: IntType;
     /// Whether or not this integer is signed
@@ -83,7 +85,7 @@ pub unsafe trait PrimFloat: StaticReflect + Copy + sealed::Sealed {
 }
 
 /// A type that supports accessing its fields via reflection.
-/// 
+///
 /// All fields are assumed to be defined in a way that is compatible
 /// with the the C ABI. In other words, the type must be `#[repr(C)]`
 ///

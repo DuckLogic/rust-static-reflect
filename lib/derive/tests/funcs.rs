@@ -1,9 +1,9 @@
 use std::os::raw::c_void;
 
-use static_reflect_derive::reflect_func;
-use static_reflect::StaticReflect;
 use static_reflect::funcs::{FunctionDeclaration, FunctionLocation, SignatureDef};
-use static_reflect::types::{TypeInfo, FloatSize};
+use static_reflect::types::{FloatSize, TypeInfo};
+use static_reflect::StaticReflect;
+use static_reflect_derive::reflect_func;
 use std::marker::PhantomData;
 
 #[reflect_func]
@@ -63,7 +63,9 @@ fn extern_block() {
         FunctionDeclaration::<f32, (f32,)> {
             name: "sqrt",
             is_unsafe: true, // NOTE: Foreign function
-            location: Some(FunctionLocation::DynamicallyLinked { link_name: Some("sqrtf") }),
+            location: Some(FunctionLocation::DynamicallyLinked {
+                link_name: Some("sqrtf")
+            }),
             signature: SignatureDef {
                 argument_types: &[f32::TYPE_INFO],
                 return_type: &f32::TYPE_INFO,
@@ -99,9 +101,16 @@ fn rust_funcs() {
         FunctionDeclaration::<(), (f32, f32)> {
             name: "stupid_name",
             is_unsafe: false,
-            location: Some(FunctionLocation::DynamicallyLinked { link_name: Some("better_name") }),
+            location: Some(FunctionLocation::DynamicallyLinked {
+                link_name: Some("better_name")
+            }),
             signature: SignatureDef {
-                argument_types: &[f32::TYPE_INFO, TypeInfo::Float { size: FloatSize::Single }],
+                argument_types: &[
+                    f32::TYPE_INFO,
+                    TypeInfo::Float {
+                        size: FloatSize::Single
+                    }
+                ],
                 return_type: &TypeInfo::Unit,
                 calling_convention: Default::default()
             },
@@ -114,7 +123,9 @@ fn rust_funcs() {
         FunctionDeclaration::<f64, (f64, f64)> {
             name: "absolute_address_example",
             is_unsafe: false,
-            location: Some(FunctionLocation::AbsoluteAddress(absolute_address_example as *const ())),
+            location: Some(FunctionLocation::AbsoluteAddress(
+                absolute_address_example as *const ()
+            )),
             signature: SignatureDef {
                 argument_types: &[f64::TYPE_INFO, f64::TYPE_INFO],
                 return_type: &f64::TYPE_INFO,
@@ -125,4 +136,3 @@ fn rust_funcs() {
         }
     );
 }
-

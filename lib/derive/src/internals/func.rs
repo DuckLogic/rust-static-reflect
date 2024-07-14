@@ -1,12 +1,14 @@
-use syn::{Error, FnArg, ReturnType, ForeignItem, Attribute, ItemFn, Meta, ItemForeignMod, Item, Lit, Type, Expr};
-use syn::parse::{self, Parse, ParseStream};
-use proc_macro2::{Ident, TokenStream, Span};
-use quote::{ToTokens, TokenStreamExt};
-use syn::Signature;
-use syn::spanned::Spanned;
 use itertools::Itertools;
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
-
+use quote::{ToTokens, TokenStreamExt};
+use syn::parse::{self, Parse, ParseStream};
+use syn::spanned::Spanned;
+use syn::Signature;
+use syn::{
+    Attribute, Error, Expr, FnArg, ForeignItem, Item, ItemFn, ItemForeignMod, Lit, Meta,
+    ReturnType, Type,
+};
 
 const FUNC_ATTR_NAME: &str = "reflect_func";
 
@@ -31,12 +33,10 @@ impl Parse for FuncArgs {
                     "absolute" => {
                         args.absolute = true;
                     }
-                    _ => {
-                        return Err(input.error(format_args!("Invalid flag: {}", ident)))
-                    }
+                    _ => return Err(input.error(format_args!("Invalid flag: {}", ident))),
                 }
             } else {
-                return Err(input.error("Unexpected token"))
+                return Err(input.error("Unexpected token"));
             }
         }
         Ok(args)
@@ -60,25 +60,22 @@ struct FunctionDefOpts {
 fn determine_fn_link_name(item: &ItemFn) -> Result<Option<String>, Error> {
     for attr in &item.attrs {
         match attr.meta {
-            Meta::Path(ref p) if p.is_ident("no_mangle") => {
-                return Ok(None)
-            },
+            Meta::Path(ref p) if p.is_ident("no_mangle") => return Ok(None),
             Meta::NameValue(ref item) if item.path.is_ident("export_name") => {
                 return match item.value {
-                    Expr::Lit(syn::ExprLit { lit: Lit::Str(ref s), .. }) => {
-                        Ok(Some(s.value()))
-                    },
-                    _ => {
-                        Err(Error::new(item.span(), "Expected a string for export_name"))
-                    }
+                    Expr::Lit(syn::ExprLit {
+                        lit: Lit::Str(ref s),
+                        ..
+                    }) => Ok(Some(s.value())),
+                    _ => Err(Error::new(item.span(), "Expected a string for export_name")),
                 }
-            },
+            }
             _ => {}
         }
     }
     Err(Error::new(
         item.span(),
-        "Function must be #[no_mangle] to support dynamic linking"
+        "Function must be #[no_mangle] to support dynamic linking",
     ))
 }
 
@@ -87,17 +84,16 @@ fn determine_foreign_link_name(attrs: &[Attribute]) -> Result<Option<String>, sy
         match attr.meta {
             Meta::NameValue(ref l) if l.path.is_ident("link_name") => {
                 return match l.value {
-                    Expr::Lit(syn::ExprLit { lit: Lit::Str(ref s), .. }) => {
-                        Ok(Some(s.value()))
-                    },
-                    _ => {
-                        Err(syn::Error::new(
-                            l.span(),
-                            "Expected a string for #[link_name]"
-                        ))
-                    }
+                    Expr::Lit(syn::ExprLit {
+                        lit: Lit::Str(ref s),
+                        ..
+                    }) => Ok(Some(s.value())),
+                    _ => Err(syn::Error::new(
+                        l.span(),
+                        "Expected a string for #[link_name]",
+                    )),
                 }
-            },
+            }
             _ => {}
         }
     }
@@ -108,12 +104,10 @@ pub fn handle_item(item: &Item, args: FuncArgs) -> Result<TokenStream, syn::Erro
     match *item {
         Item::Fn(ref func) => handle_fn_def(func, args),
         Item::ForeignMod(ref foreign_mod) => handle_foreign_mod(foreign_mod, args),
-        _ => {
-            Err(Error::new(
-                item.span(),
-                format!("Invalid target for #[{}]", FUNC_ATTR_NAME)
-            ))
-        }
+        _ => Err(Error::new(
+            item.span(),
+            format!("Invalid target for #[{}]", FUNC_ATTR_NAME),
+        )),
     }
 }
 
@@ -124,13 +118,17 @@ fn handle_fn_def(item: &ItemFn, args: FuncArgs) -> Result<TokenStream, syn::Erro
     } else {
         let name = determine_fn_link_name(item)?;
         FunctionLocation::DynamicallyLinked {
-            link_name: name.map(|s| quote!(#s))
+            link_name: name.map(|s| quote!(#s)),
         }
     };
-    let def = emit_def_from_signature(&item.sig, FunctionDefOpts {
-        assume_c_abi: false, location,
-        is_unsafe: item.sig.unsafety.is_some()
-    })?;
+    let def = emit_def_from_signature(
+        &item.sig,
+        FunctionDefOpts {
+            assume_c_abi: false,
+            location,
+            is_unsafe: item.sig.unsafety.is_some(),
+        },
+    )?;
     let verify_types = types_from_signature(&item.sig);
     let def_const = def.make_constant(&verify_types);
     Ok(quote! {
@@ -139,20 +137,21 @@ fn handle_fn_def(item: &ItemFn, args: FuncArgs) -> Result<TokenStream, syn::Erro
     })
 }
 
-fn handle_foreign_mod(item: &ItemForeignMod, default_args: FuncArgs) -> Result<TokenStream, syn::Error> {
+fn handle_foreign_mod(
+    item: &ItemForeignMod,
+    default_args: FuncArgs,
+) -> Result<TokenStream, syn::Error> {
     // Handle default args
     if default_args.absolute {
         return Err(syn::Error::new(
             item.span(),
-            "Absolute locations aren't supported in foreign functions"
+            "Absolute locations aren't supported in foreign functions",
         ));
     }
     match item.abi.name.as_ref() {
-        Some(abi_name) if &*abi_name.value() == "C" => {},
-        None => {},
-        _ => {
-            return Err(Error::new(item.abi.span(), "Expected C ABI"))
-        }
+        Some(abi_name) if &*abi_name.value() == "C" => {}
+        None => {}
+        _ => return Err(Error::new(item.abi.span(), "Expected C ABI")),
     }
     let mut result_static_defs = Vec::new();
     let mut result_items = Vec::new();
@@ -161,13 +160,14 @@ fn handle_foreign_mod(item: &ItemForeignMod, default_args: FuncArgs) -> Result<T
             ForeignItem::Fn(ref item) => {
                 let mut result_item = (*item).clone();
                 result_item.attrs.clear();
-                let mut override_args =None;
+                let mut override_args = None;
                 for attr in &item.attrs {
                     if attr.path().is_ident(FUNC_ATTR_NAME) {
                         // NOTE: This attribute is removed from the result_item
                         attr.parse_nested_meta(|meta| {
                             if override_args.is_some() {
-                                return Err(meta.error(format!("Conflicting #[{FUNC_ATTR_NAME}] attributes")));
+                                return Err(meta
+                                    .error(format!("Conflicting #[{FUNC_ATTR_NAME}] attributes")));
                             }
                             override_args = Some(FuncArgs::parse(meta.input)?);
                             Ok(())
@@ -181,31 +181,28 @@ fn handle_foreign_mod(item: &ItemForeignMod, default_args: FuncArgs) -> Result<T
                     if override_args.absolute {
                         return Err(syn::Error::new(
                             item.span(),
-                            "Absolute locations aren't supported in foreign functions"
+                            "Absolute locations aren't supported in foreign functions",
                         ));
                     }
                 }
-                let link_name = determine_foreign_link_name(&item.attrs)?
-                    .map(|s| quote!(#s));
+                let link_name = determine_foreign_link_name(&item.attrs)?.map(|s| quote!(#s));
                 let args = FunctionDefOpts {
                     location: FunctionLocation::DynamicallyLinked { link_name },
                     assume_c_abi: true,
-                    is_unsafe: true // All foreign defs are unsafe
+                    is_unsafe: true, // All foreign defs are unsafe
                 };
                 let verify_types = types_from_signature(&item.sig);
-                result_static_defs.push((
-                    emit_def_from_signature(&item.sig, args)?,
-                    verify_types
-                ));
+                result_static_defs.push((emit_def_from_signature(&item.sig, args)?, verify_types));
                 result_items.push(ForeignItem::Fn(result_item));
-            },
+            }
             _ => {
                 // Passthrough
                 result_items.push((*item).clone());
             }
         }
     }
-    let function_def_consts = result_static_defs.iter()
+    let function_def_consts = result_static_defs
+        .iter()
         .map(|(def, verify_types)| def.make_constant(verify_types))
         .collect_vec();
     Ok(quote! {
@@ -221,57 +218,61 @@ fn emit_def_from_signature(
     opts: FunctionDefOpts,
 ) -> Result<StaticFunctionDef, syn::Error> {
     match item.abi.as_ref().and_then(|abi| abi.name.as_ref()) {
-        Some(abi_name) if &*abi_name.value() == "C" => {},
-        None if opts.assume_c_abi => {},
-        _ => {
-            return Err(Error::new(item.span(), "Expected C ABI"))
-        }
+        Some(abi_name) if &*abi_name.value() == "C" => {}
+        None if opts.assume_c_abi => {}
+        _ => return Err(Error::new(item.span(), "Expected C ABI")),
     }
     let mut argument_types = Vec::new();
     let mut static_arg_types = Vec::new();
     for input in &item.inputs {
         match input {
-            FnArg::Receiver(ref item) => {
-                return Err(Error::new(item.span(), "Invalid input"))
-            },
+            FnArg::Receiver(ref item) => return Err(Error::new(item.span(), "Invalid input")),
             FnArg::Typed(ref item) => {
                 let ty = &item.ty;
                 static_arg_types.push(quote!(#ty));
                 argument_types.push(quote!(<#ty as static_reflect::StaticReflect>::TYPE_INFO))
-            },
+            }
         }
     }
     let return_type = match item.output {
         ReturnType::Default => quote!(&static_reflect::types::TypeInfo::Unit),
         ReturnType::Type(_, ref ty) => {
             quote!(&<#ty as static_reflect::StaticReflect>::TYPE_INFO)
-        },
+        }
     };
-    let signature = StaticSignatureDef { argument_types, return_type };
+    let signature = StaticSignatureDef {
+        argument_types,
+        return_type,
+    };
     Ok(StaticFunctionDef {
         name: item.ident.to_string(),
         location: opts.location,
-        signature, is_unsafe: opts.is_unsafe,
+        signature,
+        is_unsafe: opts.is_unsafe,
         static_return_type: match item.output {
             ReturnType::Default => quote!(()),
             ReturnType::Type(_, ref ty) => quote!(#ty),
         },
-        static_arg_types: quote!((#(#static_arg_types,)*))
+        static_arg_types: quote!((#(#static_arg_types,)*)),
     })
 }
 
 // Get all the types from the signature
 pub fn types_from_signature(sig: &Signature) -> Vec<Type> {
-    sig.inputs.iter().map(|arg| match *arg {
-        FnArg::Receiver(_) => Type::Verbatim(quote!(Self)),
-        FnArg::Typed(ref t) => (*t.ty).clone()
-    }).chain(std::iter::once(match sig.output {
-        ReturnType::Default => Type::Tuple(syn::TypeTuple {
-            paren_token: Default::default(),
-            elems: Default::default()
-        }),
-        ReturnType::Type(_, ref ty) => (**ty).clone(),
-    })).collect()
+    sig.inputs
+        .iter()
+        .map(|arg| match *arg {
+            FnArg::Receiver(_) => Type::Verbatim(quote!(Self)),
+            FnArg::Typed(ref t) => (*t.ty).clone(),
+        })
+        .chain(std::iter::once(match sig.output {
+            ReturnType::Default => Type::Tuple(syn::TypeTuple {
+                paren_token: Default::default(),
+                elems: Default::default(),
+            }),
+            ReturnType::Type(_, ref ty) => (**ty).clone(),
+        }))
+        .collect()
 }
 
 // Emit
@@ -306,14 +307,12 @@ impl StaticFunctionDef {
 #[derive(Clone, Debug)]
 struct StaticSignatureDef {
     argument_types: Vec<TokenStream>,
-    return_type: TokenStream
+    return_type: TokenStream,
 }
 
 #[derive(Clone, Debug)]
 enum FunctionLocation {
-    DynamicallyLinked {
-        link_name: Option<TokenStream>
-    },
+    DynamicallyLinked { link_name: Option<TokenStream> },
     AbsoluteAddress(TokenStream),
 }
 
@@ -325,7 +324,7 @@ impl ToTokens for StaticFunctionDef {
             ref location,
             ref is_unsafe,
             ref static_return_type,
-            static_arg_types: ref staitc_arg_types
+            static_arg_types: ref staitc_arg_types,
         } = *self;
         tokens.append_all(quote!(static_reflect::funcs::FunctionDeclaration::<#static_return_type, #staitc_arg_types> {
             name: #name,
@@ -358,7 +357,7 @@ impl ToTokens for StaticSignatureDef {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let StaticSignatureDef {
             ref argument_types,
-            ref return_type
+            ref return_type,
         } = *self;
         tokens.append_all(quote!(static_reflect::funcs::SignatureDef {
             argument_types: &[#(#argument_types),*],

@@ -1,8 +1,8 @@
 //! Implementations of [StaticReflect] for core types (for `#![no_std]`)
-use crate::{StaticReflect, PrimInt, PrimFloat};
-use crate::types::{TypeInfo, IntSize, IntType, SimpleNonZeroRepr, FloatSize};
-use std::mem::{self, ManuallyDrop};
+use crate::types::{FloatSize, IntSize, IntType, SimpleNonZeroRepr, TypeInfo};
+use crate::{PrimFloat, PrimInt, StaticReflect};
 use core::ptr::NonNull;
+use std::mem::{self, ManuallyDrop};
 use std::num::{NonZeroI32, NonZeroU32, NonZeroU8, NonZeroUsize};
 
 macro_rules! impl_primitive {
@@ -10,7 +10,7 @@ macro_rules! impl_primitive {
         unsafe impl StaticReflect for $target {
             const TYPE_INFO: TypeInfo = $info;
         }
-    }
+    };
 }
 macro_rules! impl_ints {
     ($($target:ty),*) => {
@@ -47,7 +47,6 @@ unsafe impl PrimFloat for f64 {
 // Builtin support for the never type
 impl_primitive!(! => TypeInfo::Never);
 
-
 /// Support [StaticReflect] for [ManuallyDrop] by just representing the inner type
 unsafe impl<T: StaticReflect> StaticReflect for ManuallyDrop<T> {
     const TYPE_INFO: TypeInfo = {
@@ -64,19 +63,19 @@ unsafe impl<T: StaticReflect> StaticReflect for ManuallyDrop<T> {
 /// This is fine since the static reflection system
 /// doesn't maintain
 /// information about pointers (to avoid cycles).
-unsafe impl <T> StaticReflect for *mut T {
+unsafe impl<T> StaticReflect for *mut T {
     const TYPE_INFO: TypeInfo = TypeInfo::Pointer;
 }
 /// An immutable pointer
 ///
 /// The static reflection system makes no distinction between
 /// mutable and immutable pointers.
-unsafe impl <T> StaticReflect for *const T {
+unsafe impl<T> StaticReflect for *const T {
     const TYPE_INFO: TypeInfo = TypeInfo::Pointer;
 }
 
-unsafe impl <T> SimpleNonZeroRepr for NonNull<T> {}
-unsafe impl <T> StaticReflect for NonNull<T> {
+unsafe impl<T> SimpleNonZeroRepr for NonNull<T> {}
+unsafe impl<T> StaticReflect for NonNull<T> {
     const TYPE_INFO: TypeInfo = TypeInfo::Pointer;
 }
 unsafe impl SimpleNonZeroRepr for NonZeroUsize {}
@@ -96,8 +95,7 @@ unsafe impl StaticReflect for NonZeroI32 {
     const TYPE_INFO: TypeInfo = i32::TYPE_INFO;
 }
 
-
-unsafe impl <T: SimpleNonZeroRepr> StaticReflect for Option<T> {
+unsafe impl<T: SimpleNonZeroRepr> StaticReflect for Option<T> {
     /// We have the representation as our internals,
     /// except for the fact we might be null
     const TYPE_INFO: TypeInfo = T::TYPE_INFO;

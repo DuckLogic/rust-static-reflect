@@ -1,9 +1,9 @@
 //! The static type system
-use crate::{StaticReflect, FieldReflect, PrimInt, PrimFloat};
+use crate::{FieldReflect, PrimFloat, PrimInt, StaticReflect};
 
 use std::cmp::Ordering;
+use std::fmt::{self, Debug, Display, Formatter, Write};
 use std::marker::PhantomData;
-use std::fmt::{self, Formatter, Display, Debug, Write};
 
 #[cfg(feature = "builtins")]
 use crate::builtins::{AsmSlice, AsmStr};
@@ -38,7 +38,7 @@ pub enum IntSize {
     /// This is the default integer type (by convention)
     Int = 4,
     /// An eight byte integer (`u64`)
-    Long = 8
+    Long = 8,
 }
 impl IntSize {
     /// Get the size of the specified primitive integer
@@ -47,13 +47,16 @@ impl IntSize {
     }
     /// A pointer-sized integer
     pub const POINTER: IntSize = {
-        #[cfg(target_pointer_width = "16")] {
+        #[cfg(target_pointer_width = "16")]
+        {
             IntSize::Short
         }
-        #[cfg(target_pointer_width = "32")] {
+        #[cfg(target_pointer_width = "32")]
+        {
             IntSize::Int
         }
-        #[cfg(target_pointer_width = "64")] {
+        #[cfg(target_pointer_width = "64")]
+        {
             IntSize::Long
         }
     };
@@ -70,7 +73,7 @@ impl IntSize {
     pub const fn unwrap_from_bytes(bytes: usize) -> IntSize {
         match Self::from_bytes(bytes) {
             Ok(res) => res,
-            Err(_) => panic!("Invalid number of bytes")
+            Err(_) => panic!("Invalid number of bytes"),
         }
     }
     /// Get an integer size corresponding to the specified number of bytes
@@ -81,7 +84,7 @@ impl IntSize {
             2 => IntSize::Short,
             4 => IntSize::Int,
             8 => IntSize::Long,
-            _ => return Err(InvalidSizeErr { bytes })
+            _ => return Err(InvalidSizeErr { bytes }),
         })
     }
     /// Create an unsigned [IntType] with this size
@@ -89,7 +92,7 @@ impl IntSize {
     pub const fn unsigned(self) -> IntType {
         IntType {
             size: self,
-            signed: false
+            signed: false,
         }
     }
     /// Create an signed [IntType] with this size
@@ -97,7 +100,7 @@ impl IntSize {
     pub const fn signed(self) -> IntType {
         IntType {
             size: self,
-            signed: true
+            signed: true,
         }
     }
 }
@@ -129,10 +132,10 @@ pub enum FloatSize {
     /// This type is 4 bytes (`f32`)
     Single = 4,
     /// A double-precision floating point number.
-    /// 
+    ///
     /// By convention, this type is the default.
     /// This type is 8 bytes (`f64`).
-    Double = 8
+    Double = 8,
 }
 impl FloatSize {
     /// Get the size of the specified float
@@ -152,7 +155,7 @@ impl FloatSize {
         Ok(match bytes {
             4 => FloatSize::Single,
             8 => FloatSize::Double,
-            _ => return Err(InvalidSizeErr { bytes })
+            _ => return Err(InvalidSizeErr { bytes }),
         })
     }
 }
@@ -182,14 +185,38 @@ impl IntType {
     pub const fn align(&self) -> usize {
         use std::mem::align_of;
         match *self {
-            IntType { size: IntSize::Byte, signed: false } => align_of::<u8>(),
-            IntType { size: IntSize::Short, signed: false } => align_of::<u16>(),
-            IntType { size: IntSize::Int, signed: false } => align_of::<u32>(),
-            IntType { size: IntSize::Long, signed: false } => align_of::<u64>(),
-            IntType { size: IntSize::Byte, signed: true } => align_of::<i8>(),
-            IntType { size: IntSize::Short, signed: true } => align_of::<i16>(),
-            IntType { size: IntSize::Int, signed: true } => align_of::<i32>(),
-            IntType { size: IntSize::Long, signed: true } => align_of::<i64>(),
+            IntType {
+                size: IntSize::Byte,
+                signed: false,
+            } => align_of::<u8>(),
+            IntType {
+                size: IntSize::Short,
+                signed: false,
+            } => align_of::<u16>(),
+            IntType {
+                size: IntSize::Int,
+                signed: false,
+            } => align_of::<u32>(),
+            IntType {
+                size: IntSize::Long,
+                signed: false,
+            } => align_of::<u64>(),
+            IntType {
+                size: IntSize::Byte,
+                signed: true,
+            } => align_of::<i8>(),
+            IntType {
+                size: IntSize::Short,
+                signed: true,
+            } => align_of::<i16>(),
+            IntType {
+                size: IntSize::Int,
+                signed: true,
+            } => align_of::<i32>(),
+            IntType {
+                size: IntSize::Long,
+                signed: true,
+            } => align_of::<i64>(),
         }
     }
     /// The type of the unsigned `u8` integer
@@ -329,14 +356,18 @@ pub enum TaggedUnionStyle {
     ///
     /// This stores tagged enums as a union, with the tag as the first field of each variant.
     /// In some cases, this can be more efficient than the "traditional" representation.
-    Primitive
+    Primitive,
 }
 impl TaggedUnionStyle {
     /// Compute the `Layout` of an enum with this style and the specified
     /// discriminant and variant layouts.
     ///
     /// Panics if the enum is uninhabited, or an error occurs calculating the combined layouts..
-    pub fn compute_layout(&self, discriminant_size: Layout, variant_layouts: impl Iterator<Item=Layout>) -> Layout {
+    pub fn compute_layout(
+        &self,
+        discriminant_size: Layout,
+        variant_layouts: impl Iterator<Item = Layout>,
+    ) -> Layout {
         let mut starting_layout = discriminant_size;
         match *self {
             TaggedUnionStyle::Traditional => {
@@ -345,7 +376,7 @@ impl TaggedUnionStyle {
                  * We have padding before the start of each variant.
                  */
                 starting_layout = starting_layout.pad_to_align();
-            },
+            }
             TaggedUnionStyle::Primitive => {
                 // We're more efficient - no padding before the start of each variant
             }
@@ -396,7 +427,7 @@ pub enum TypeInfo {
     /// A floating point number
     Float {
         /// The size/precision of the float
-        size: FloatSize
+        size: FloatSize,
     },
     /// A slice of memory, represented as pointer + length
     ///
@@ -448,7 +479,7 @@ pub enum TypeInfo {
         ///
         /// Since this is all we have, it's what used
         /// to disambiguate between them.
-        name: &'static str
+        name: &'static str,
     },
     /// A 'magic' type, with a user-defined meaning
     ///
@@ -459,20 +490,24 @@ pub enum TypeInfo {
         /// and what it actually means.
         id: &'static &'static str,
         /// Extra information (if any)
-        extra: Option<&'static TypeInfo>
-    }
+        extra: Option<&'static TypeInfo>,
+    },
 }
 impl TypeInfo {
     /// A 32-bit, single-precision float
-    pub const F32: Self = TypeInfo::Float { size: FloatSize::Single };
+    pub const F32: Self = TypeInfo::Float {
+        size: FloatSize::Single,
+    };
     /// A 64-bit, double-precision float
-    pub const F64: Self = TypeInfo::Float { size: FloatSize::Double };
+    pub const F64: Self = TypeInfo::Float {
+        size: FloatSize::Double,
+    };
 }
 impl TypeInfo {
     /// The size of the type, in bytes
     pub const fn size(&self) -> usize {
-        use std::mem::size_of;
         use self::TypeInfo::*;
+        use std::mem::size_of;
         match *self {
             Unit => 0,
             #[cfg(feature = "never")]
@@ -492,7 +527,7 @@ impl TypeInfo {
             TaggedUnion(def) => def.size,
             CStyleEnum(def) => def.discriminant.size.bytes(),
             // Provide a dummy value
-            TypeInfo::Magic { .. } | TypeInfo::Extern { .. } => 0xFFFF_FFFF
+            TypeInfo::Magic { .. } | TypeInfo::Extern { .. } => 0xFFFF_FFFF,
         }
     }
     /// The alignment of the type, matching `std::mem::align_of`
@@ -505,8 +540,12 @@ impl TypeInfo {
             TypeInfo::Magic { .. } | TypeInfo::Extern { .. } => 0,
             TypeInfo::Bool => align_of::<bool>(),
             TypeInfo::Integer(tp) => tp.align(),
-            TypeInfo::Float { size: FloatSize::Single } => align_of::<f32>(),
-            TypeInfo::Float { size: FloatSize::Double } => align_of::<f64>(),
+            TypeInfo::Float {
+                size: FloatSize::Single,
+            } => align_of::<f32>(),
+            TypeInfo::Float {
+                size: FloatSize::Double,
+            } => align_of::<f64>(),
             #[cfg(feature = "builtins")]
             TypeInfo::Slice { .. } | TypeInfo::Optional(_) => unimplemented!(),
             TypeInfo::Pointer => align_of::<*const ()>(),
@@ -515,7 +554,7 @@ impl TypeInfo {
             TypeInfo::Structure(def) => def.alignment,
             TypeInfo::UntaggedUnion(def) => def.alignment,
             TypeInfo::CStyleEnum(def) => def.discriminant.align(),
-            TypeInfo::TaggedUnion(def) => def.alignment
+            TypeInfo::TaggedUnion(def) => def.alignment,
         }
     }
 }
@@ -537,7 +576,10 @@ impl Display for TypeInfo {
             TypeInfo::TaggedUnion(def) => f.write_str(def.name),
             TypeInfo::Extern { name } => write!(f, "extern {}", name),
             TypeInfo::Magic { id, extra: None } => write!(f, "magic::{}", id),
-            TypeInfo::Magic { id, extra: Some(extra) } => write!(f, "magic::{}<{}>", id, extra)
+            TypeInfo::Magic {
+                id,
+                extra: Some(extra),
+            } => write!(f, "magic::{}<{}>", id, extra),
         }
     }
 }
@@ -572,7 +614,7 @@ pub struct FieldDef<T: StaticReflect = ()> {
     /// The numeric index of the field
     ///
     /// Should correspond to the order of declaration
-    pub index: usize
+    pub index: usize,
 }
 impl<T: StaticReflect> FieldDef<T> {
     /// Erase the static type information from this field definition
@@ -582,7 +624,7 @@ impl<T: StaticReflect> FieldDef<T> {
             name: self.name,
             value_type: self.value_type.erase(),
             offset: self.offset,
-            index: self.index
+            index: self.index,
         }
     }
     /// The offset of the field, in bytes
@@ -603,7 +645,7 @@ pub struct CStyleEnumDef {
     /// This is what determines the enum's runtime size and alignment.
     pub discriminant: IntType,
     /// The valid variants of this enum
-    pub variants: &'static [CStyleEnumVariant]
+    pub variants: &'static [CStyleEnumVariant],
 }
 impl CStyleEnumDef {
     /// Determines whether this enum has any explicit discriminant values,
@@ -613,7 +655,9 @@ impl CStyleEnumDef {
     /// is implicitly equal to its index
     #[inline]
     pub fn has_explicit_discriminants(&self) -> bool {
-        self.variants.iter().any(|variant| variant.discriminant.is_explicit())
+        self.variants
+            .iter()
+            .any(|variant| variant.discriminant.is_explicit())
     }
 }
 /// A variant in a C-style enum (a Rust enum without any data)
@@ -624,7 +668,7 @@ pub struct CStyleEnumVariant {
     /// The name of this variant
     pub name: &'static str,
     /// The value of the enum's discriminant
-    pub discriminant: DiscriminantValue
+    pub discriminant: DiscriminantValue,
 }
 /// The value of the discriminant
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -633,7 +677,7 @@ pub enum DiscriminantValue {
     /// which is implicitly equal to its declaration order.
     Default {
         /// The index
-        declaration_index: usize
+        declaration_index: usize,
     },
     /// This discriminant hasn't been explicitly specified,
     ///
@@ -651,7 +695,7 @@ pub enum DiscriminantValue {
         /// The raw bits of the explicit discriminant's value.
         ///
         /// It is possible that this is a negative value, depending on the [IntType] of the discriminant.
-        bits: u64
+        bits: u64,
     },
 }
 impl DiscriminantValue {
@@ -668,8 +712,8 @@ impl DiscriminantValue {
     pub fn bits(&self) -> u64 {
         match *self {
             DiscriminantValue::Default { declaration_index } => declaration_index as u64,
-            DiscriminantValue::ImplicitlyOffset { bits } |
-            DiscriminantValue::ExplicitInteger { bits } => bits
+            DiscriminantValue::ImplicitlyOffset { bits }
+            | DiscriminantValue::ExplicitInteger { bits } => bits,
         }
     }
 }
@@ -694,7 +738,7 @@ pub struct TaggedUnionDef {
     /// The alignment of the type
     ///
     /// This should be equal to max(discriminant.align, max(variant.align for variant in variants))
-    pub alignment: usize
+    pub alignment: usize,
 }
 
 /// A variant in a tagged union (Rust-style enum)
@@ -710,7 +754,7 @@ pub struct TaggedUnionVariant {
     /// It has a matching name, fields, and size.
     pub equivalent_structure: StructureDef,
     /// The value of the enum's discriminant
-    pub discriminant: DiscriminantValue
+    pub discriminant: DiscriminantValue,
 }
 impl TaggedUnionVariant {
     /// The name of the variant
@@ -748,7 +792,7 @@ pub struct UnionFieldDef<T: StaticReflect = ()> {
     ///
     /// This has no effect on generated code, but it should probably correspond
     /// to the order of declaration in the source code
-    pub index: usize
+    pub index: usize,
 }
 impl<T: StaticReflect> UnionFieldDef<T> {
     /// Erase the generic type of this field
@@ -756,7 +800,7 @@ impl<T: StaticReflect> UnionFieldDef<T> {
         UnionFieldDef {
             name: self.name,
             value_type: self.value_type.erase(),
-            index: self.index
+            index: self.index,
         }
     }
     /// Offset of the field in the union
@@ -794,28 +838,52 @@ pub enum PrimitiveType {
     /// A float
     Float {
         /// The size/precision of the float
-        size: FloatSize
+        size: FloatSize,
     },
 }
 impl PrimitiveType {
     /// The type information for this primitive type
     pub fn type_info(&self) -> &TypeInfo {
-        use self::PrimitiveType::*;
-        use self::IntSize::*;
         use self::FloatSize::*;
+        use self::IntSize::*;
+        use self::PrimitiveType::*;
         match *self {
             Unit => &TypeInfo::Unit,
             Never => &TypeInfo::Never,
             Bool => &TypeInfo::Bool,
             Pointer => &TypeInfo::Pointer,
-            Integer(IntType { size: Byte, signed: true }) => &TypeInfo::Integer(IntType::U8),
-            Integer(IntType { size: Short, signed: true }) => &TypeInfo::Integer(IntType::U16),
-            Integer(IntType  { size: Int, signed: true }) => &TypeInfo::Integer(IntType::U32),
-            Integer(IntType { size: Long, signed: true }) => &TypeInfo::Integer(IntType::U64),
-            Integer(IntType { size: Byte, signed: false }) => &TypeInfo::Integer(IntType::I8),
-            Integer(IntType { size: Short, signed: false }) => &TypeInfo::Integer(IntType::I16),
-            Integer(IntType { size: Int, signed: false }) => &TypeInfo::Integer(IntType::I32),
-            Integer(IntType { size: Long, signed: false }) => &TypeInfo::Integer(IntType::I64),
+            Integer(IntType {
+                size: Byte,
+                signed: true,
+            }) => &TypeInfo::Integer(IntType::U8),
+            Integer(IntType {
+                size: Short,
+                signed: true,
+            }) => &TypeInfo::Integer(IntType::U16),
+            Integer(IntType {
+                size: Int,
+                signed: true,
+            }) => &TypeInfo::Integer(IntType::U32),
+            Integer(IntType {
+                size: Long,
+                signed: true,
+            }) => &TypeInfo::Integer(IntType::U64),
+            Integer(IntType {
+                size: Byte,
+                signed: false,
+            }) => &TypeInfo::Integer(IntType::I8),
+            Integer(IntType {
+                size: Short,
+                signed: false,
+            }) => &TypeInfo::Integer(IntType::I16),
+            Integer(IntType {
+                size: Int,
+                signed: false,
+            }) => &TypeInfo::Integer(IntType::I32),
+            Integer(IntType {
+                size: Long,
+                signed: false,
+            }) => &TypeInfo::Integer(IntType::I64),
             Float { size: Single } => &TypeInfo::Float { size: Single },
             Float { size: Double } => &TypeInfo::Float { size: Double },
         }
@@ -830,11 +898,11 @@ impl PrimitiveType {
             PrimitiveType::Pointer => {
                 assert_eq!(std::mem::size_of::<usize>(), std::mem::size_of::<*mut ()>());
                 std::mem::size_of::<*mut ()>()
-            },
+            }
             PrimitiveType::Bool => {
                 assert_eq!(std::mem::size_of::<bool>(), 1);
                 1
-            },
+            }
         }
     }
     /// The size of this type, in bytes
@@ -848,15 +916,20 @@ impl PartialOrd for PrimitiveType {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (*self, *other) {
             (
-                PrimitiveType::Integer(IntType { size: first, signed: first_signed }),
-                PrimitiveType::Integer(IntType { size: second, signed: second_signed })
-            ) => {
-                Some(first.cmp(&second)
-                    .then(first_signed.cmp(&second_signed)))
-            },
-            (PrimitiveType::Float { size: first }, PrimitiveType::Float { size: second }) => Some(first.cmp(&second)),
+                PrimitiveType::Integer(IntType {
+                    size: first,
+                    signed: first_signed,
+                }),
+                PrimitiveType::Integer(IntType {
+                    size: second,
+                    signed: second_signed,
+                }),
+            ) => Some(first.cmp(&second).then(first_signed.cmp(&second_signed))),
+            (PrimitiveType::Float { size: first }, PrimitiveType::Float { size: second }) => {
+                Some(first.cmp(&second))
+            }
             (first, other) if first == other => Some(Ordering::Equal),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -873,7 +946,7 @@ impl<T: StaticReflect> Clone for TypeId<T> {
 #[derive(Eq, PartialEq, Hash)]
 pub struct TypeId<T: StaticReflect = ()> {
     value: &'static TypeInfo,
-    marker: PhantomData<fn() -> T>
+    marker: PhantomData<fn() -> T>,
 }
 impl TypeId {
     /// Get the erased TypeId of the specified type `T`
@@ -888,7 +961,7 @@ impl<T: StaticReflect> TypeId<T> {
     pub const fn get() -> Self {
         TypeId {
             value: &T::TYPE_INFO,
-            marker: PhantomData
+            marker: PhantomData,
         }
     }
     /// Return a checked [TypeId] corresponding to the specified
@@ -896,7 +969,7 @@ impl<T: StaticReflect> TypeId<T> {
     pub const fn from_static(s: &'static TypeInfo) -> Self {
         TypeId {
             value: s,
-            marker: PhantomData
+            marker: PhantomData,
         }
     }
     /// Erase this type id,
@@ -948,7 +1021,7 @@ impl<T: StaticReflect> TypeId<T> {
             TypeInfo::Pointer => PrimitiveType::Pointer,
             TypeInfo::Integer(tp) => PrimitiveType::Integer(tp),
             TypeInfo::Float { size } => PrimitiveType::Float { size },
-            _ => return None
+            _ => return None,
         })
     }
     /// A reference to the underlying type
@@ -962,16 +1035,17 @@ impl<T: StaticReflect> TypeId<T> {
     pub const fn from_ref(tp: &'static TypeInfo) -> Self {
         TypeId {
             marker: PhantomData,
-            value: tp
+            value: tp,
         }
     }
     /// The information on this type's named fields
     #[inline]
     pub const fn named_field_info(&self) -> <T as FieldReflect>::NamedFieldInfo
-        where T: FieldReflect {
+    where
+        T: FieldReflect,
+    {
         T::NAMED_FIELD_INFO
     }
-
 }
 impl<T: StaticReflect> TypeId<*mut T> {
     /// The target of the pointer type
@@ -995,9 +1069,7 @@ impl<T: StaticReflect> Display for TypeId<T> {
 }
 impl<T: StaticReflect> Debug for TypeId<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("TypeId")
-            .field(self.value)
-            .finish()
+        f.debug_tuple("TypeId").field(self.value).finish()
     }
 }
 
@@ -1009,4 +1081,3 @@ pub struct FieldId {
     /// The index of the field
     pub index: usize,
 }
-

@@ -1,21 +1,18 @@
 use std::str::FromStr;
 
-use syn::{DeriveInput, Item, spanned::Spanned};
-use proc_macro2::{TokenStream};
 use self::func::FuncArgs;
+use proc_macro2::TokenStream;
+use syn::{spanned::Spanned, DeriveInput, Item};
 
-pub mod func;
 pub mod fields;
+pub mod func;
 mod utils;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Repr {
     C,
     Transparent,
-    Integer {
-        signed: bool,
-        bits: u32
-    }
+    Integer { signed: bool, bits: u32 },
 }
 
 pub fn determine_repr(input: &DeriveInput) -> Result<Option<Repr>, syn::Error> {
@@ -30,17 +27,16 @@ pub fn determine_repr(input: &DeriveInput) -> Result<Option<Repr>, syn::Error> {
                 result = Some(match &*s {
                     "C" => Repr::C,
                     "transparent" => Repr::Transparent,
-                    "u8" | "u16" | "u32" | "u64" |
-                    "i8" | "i16" | "i32" | "i64" => {
+                    "u8" | "u16" | "u32" | "u64" | "i8" | "i16" | "i32" | "i64" => {
                         let signed = match s.chars().next() {
                             Some('i') => true,
                             Some('u') => false,
-                            _ => unreachable!()
+                            _ => unreachable!(),
                         };
                         let bits = u32::from_str(&s[1..]).unwrap();
                         Repr::Integer { signed, bits }
-                    },
-                    _ => return Err(syn::Error::new(meta.path.span(), "Unknown #[repr])"))
+                    }
+                    _ => return Err(syn::Error::new(meta.path.span(), "Unknown #[repr])")),
                 });
                 Ok(())
             })?;
@@ -56,4 +52,3 @@ pub fn derive_reflect_func(args: FuncArgs, input: &Item) -> Result<TokenStream, 
 
     Ok(result)
 }
-

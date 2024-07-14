@@ -1,8 +1,8 @@
-use proc_macro2::{TokenStream, Ident};
-use syn::{Item};
-use std::io::{Write};
-use std::fmt::Display;
+use proc_macro2::{Ident, TokenStream};
 use quote::quote;
+use std::fmt::Display;
+use std::io::Write;
+use syn::Item;
 
 pub fn is_derive_enabled(name: &str) -> bool {
     match std::env::var(format!("DEBUG_DERIVE_{}", name)) {
@@ -16,13 +16,15 @@ pub fn item_name(item: &Item) -> Box<dyn Display> {
         Item::Fn(ref f) => &f.sig.ident,
         Item::Static(ref s) => &s.ident,
         Item::Struct(ref s) => &s.ident,
-        _ => return Box::new(format!("{}", quote!(item))) as Box<dyn Display>
+        _ => return Box::new(format!("{}", quote!(item))) as Box<dyn Display>,
     };
     Box::new(ident.clone()) as Box<dyn Display>
 }
 
 pub fn debug_proc_macro(macro_name: &str, input: &dyn Display, result: &TokenStream) {
-    if !is_derive_enabled(macro_name) { return }
+    if !is_derive_enabled(macro_name) {
+        return;
+    }
     let original = format!("{}", result);
     match rustfmt_expr(&original) {
         Ok(formatted) => {
@@ -30,7 +32,7 @@ pub fn debug_proc_macro(macro_name: &str, input: &dyn Display, result: &TokenStr
             for line in formatted.lines() {
                 eprintln!("  {}", line);
             }
-        },
+        }
         Err(error) => {
             eprintln!("{}!({}) caused rustfmt error:", macro_name, input);
             for line in error.lines() {
@@ -42,7 +44,9 @@ pub fn debug_proc_macro(macro_name: &str, input: &dyn Display, result: &TokenStr
 }
 
 pub fn debug_derive(trait_name: &str, target: &dyn Display, result: &TokenStream) {
-    if !is_derive_enabled(trait_name) { return }
+    if !is_derive_enabled(trait_name) {
+        return;
+    }
     let original = format!("{}", result);
     match rustfmt(&original) {
         Ok(formatted) => {
@@ -50,9 +54,12 @@ pub fn debug_derive(trait_name: &str, target: &dyn Display, result: &TokenStream
             for line in formatted.lines() {
                 eprintln!("  {}", line);
             }
-        },
+        }
         Err(error) => {
-            eprintln!("derive({}) for {} caused rustfmt error:", trait_name, target);
+            eprintln!(
+                "derive({}) for {} caused rustfmt error:",
+                trait_name, target
+            );
             for line in error.lines() {
                 eprintln!("  {}", line);
             }
@@ -72,7 +79,8 @@ pub fn rustfmt(target: &str) -> Result<String, String> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .spawn() {
+        .spawn()
+    {
         Ok(child) => child,
         Err(_) => {
             /*
@@ -80,29 +88,30 @@ pub fn rustfmt(target: &str) -> Result<String, String> {
              * At this point invalid input couldn't have been
              * the cause of our error
              */
-            return Ok(target.into())
+            return Ok(target.into());
         }
     };
-    match child.stdin.as_mut().unwrap().write_all(target.as_bytes()).and_then(|()| {
-        let output = child.wait_with_output()?;
-        let utf_err = |cause: std::string::FromUtf8Error| {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, cause)
-        };
-        let stdout = String::from_utf8(output.stdout)
-            .map_err(utf_err)?;
-        let stderr = String::from_utf8(output.stderr)
-            .map_err(utf_err)?;
-        Ok((output.status, stdout, stderr))
-    }) {
+    match child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(target.as_bytes())
+        .and_then(|()| {
+            let output = child.wait_with_output()?;
+            let utf_err = |cause: std::string::FromUtf8Error| {
+                std::io::Error::new(std::io::ErrorKind::InvalidData, cause)
+            };
+            let stdout = String::from_utf8(output.stdout).map_err(utf_err)?;
+            let stderr = String::from_utf8(output.stderr).map_err(utf_err)?;
+            Ok((output.status, stdout, stderr))
+        }) {
         Ok((status, stdout, stderr)) => {
             if status.success() {
                 Ok(stdout)
             } else {
                 Err(stderr)
             }
-        },
-        Err(e) => {
-            Err(format!("Unexpected IO error: {}", e))
         }
+        Err(e) => Err(format!("Unexpected IO error: {}", e)),
     }
 }

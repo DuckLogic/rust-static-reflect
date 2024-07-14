@@ -1,8 +1,11 @@
-use quote::{quote, format_ident};
-use syn::{parse_quote, DeriveInput, Data, Generics, GenericParam, TypeParamBound, DataEnum, DataStruct, DataUnion, Type, Error};
-use proc_macro2::{TokenStream, Ident, Span};
-use syn::spanned::Spanned;
 use indexmap::IndexMap;
+use proc_macro2::{Ident, Span, TokenStream};
+use quote::{format_ident, quote};
+use syn::spanned::Spanned;
+use syn::{
+    parse_quote, Data, DataEnum, DataStruct, DataUnion, DeriveInput, Error, GenericParam, Generics,
+    Type, TypeParamBound,
+};
 
 use super::{determine_repr, Repr};
 
@@ -30,7 +33,7 @@ pub struct DeriveFieldOptions {
     ///
     /// Useful if the type is known to be FFI-safe,
     /// but the field's type doesn't actually implement `StaticReflect`
-    pub assume_repr: Option<syn::Type>
+    pub assume_repr: Option<syn::Type>,
 }
 impl DeriveFieldOptions {
     pub fn parse_attrs(attrs: &[syn::Attribute]) -> Result<DeriveFieldOptions, syn::Error> {
@@ -47,24 +50,23 @@ impl DeriveFieldOptions {
                     } else if meta.path.is_ident("assume_repr") {
                         let value = meta.value()?;
                         let type_str = value.parse::<syn::LitStr>()?;
-                        let desired_type = syn::parse_str::<Type>(&type_str.value())
-                            .map_err(|cause| syn::Error::new(
-                                type_str.span(),
-                                format_args!("Invalid type: {}", cause)
-                            ))?;
+                        let desired_type =
+                            syn::parse_str::<Type>(&type_str.value()).map_err(|cause| {
+                                syn::Error::new(
+                                    type_str.span(),
+                                    format_args!("Invalid type: {}", cause),
+                                )
+                            })?;
                         args.assume_repr = Some(desired_type);
                     } else {
-                        return Err(Error::new_spanned(
-                            &meta.path,
-                            format_args!("Invalid flag")
-                        ));
+                        return Err(Error::new_spanned(&meta.path, format_args!("Invalid flag")));
                     }
                     // validate args
                     if args.assume_repr.is_some() && args.opaque_array {
                         return Err(Error::new_spanned(
                             &meta.path,
                             "opaque_array is incompatible with assume_repr",
-                        ))
+                        ));
                     }
                     result = Some(args);
                     Ok(())
@@ -81,7 +83,7 @@ impl Default for DeriveFieldOptions {
             // Most fields are not trailing arrays
             opaque_array: false,
             // This is unsafe
-            assume_repr: None
+            assume_repr: None,
         }
     }
 }
@@ -92,8 +94,8 @@ pub fn derive_static_reflect(input: &DeriveInput) -> Result<TokenStream, syn::Er
     if repr != Some(Repr::C) && !matches!(input.data, Data::Enum(_)) {
         return Err(syn::Error::new(
             name.span(),
-            "StaticReflect requires repr(C)"
-        ))
+            "StaticReflect requires repr(C)",
+        ));
     }
 
     let generics = add_type_bounds(&input.generics, &[parse_quote!(::reflect::StaticReflect)]);
@@ -101,27 +103,23 @@ pub fn derive_static_reflect(input: &DeriveInput) -> Result<TokenStream, syn::Er
 
     let mut extra_defs = Vec::new();
     let static_type = match input.data {
-        Data::Struct(ref data) => {
-            handle_type(
-                StructHandler::new(data, name),
-                name,
-                quote!(#impl_generics),
-                quote!(#ty_generics),
-                quote!(#where_clause),
-                &mut extra_defs
-            )?
-        },
+        Data::Struct(ref data) => handle_type(
+            StructHandler::new(data, name),
+            name,
+            quote!(#impl_generics),
+            quote!(#ty_generics),
+            quote!(#where_clause),
+            &mut extra_defs,
+        )?,
         Data::Enum(ref data) => enum_static_type(data, repr, name)?,
-        Data::Union(ref data) => {
-            handle_type(
-                UnionTypeHandler { data, name },
-                name,
-                quote!(#impl_generics),
-                quote!(#ty_generics),
-                quote!(#where_clause),
-                &mut extra_defs
-            )?
-        },
+        Data::Union(ref data) => handle_type(
+            UnionTypeHandler { data, name },
+            name,
+            quote!(#impl_generics),
+            quote!(#ty_generics),
+            quote!(#where_clause),
+            &mut extra_defs,
+        )?,
     };
 
     let r = quote! {
@@ -146,8 +144,8 @@ fn handle_type<'a, T: TypeHandler<'a>>(
     impl_generics: TokenStream,
     ty_generics: TokenStream,
     where_clause: TokenStream,
-    extra_defs: &mut Vec<TokenStream>
-) ->  Result<TokenStream, syn::Error> {
+    extra_defs: &mut Vec<TokenStream>,
+) -> Result<TokenStream, syn::Error> {
     let mut field_info: IndexMap<FieldName<'a>, TokenStream> = IndexMap::new();
     let mut field_associated_types = Vec::new();
     let mut field_defs = Vec::new();
@@ -167,14 +165,8 @@ fn handle_type<'a, T: TypeHandler<'a>>(
             }
         }
     })?;
-    let field_info_struct_name = Ident::new(
-        &format!("_FieldInfo{}", name),
-        name.span()
-    );
-    let field_info_trait_name = Ident::new(
-        &format!("_FieldTrait{}", name),
-        name.span()
-    );
+    let field_info_struct_name = Ident::new(&format!("_FieldInfo{}", name), name.span());
+    let field_info_trait_name = Ident::new(&format!("_FieldTrait{}", name), name.span());
     let associated_type_names = field_info.keys().map(FieldName::associated_type_name);
     let field_info_struct_def = {
         let fields = quote!(#(#field_defs),*);
@@ -202,10 +194,11 @@ fn handle_type<'a, T: TypeHandler<'a>>(
             #(#field_associated_types)*
         }
     ));
-    let field_inits = field_info.iter()
+    let field_inits = field_info
+        .iter()
         .map(|(name, def)| match name {
             FieldName::Tuple { .. } => quote!(#def),
-            FieldName::Named { name } => quote!(#name: #def)
+            FieldName::Named { name } => quote!(#name: #def),
         })
         .collect::<Vec<TokenStream>>();
     let field_inits = if target.is_tuple_style() {
@@ -219,7 +212,10 @@ fn handle_type<'a, T: TypeHandler<'a>>(
             const NAMED_FIELD_INFO: Self::NamedFieldInfo = #field_info_struct_name #field_inits;
         }
     ));
-    let field_access = field_info.keys().map(|name| name.access()).collect::<Vec<_>>();
+    let field_access = field_info
+        .keys()
+        .map(|name| name.access())
+        .collect::<Vec<_>>();
     let field_def_type_name = T::field_def_type(None);
     let type_def_type = T::type_def_type();
     let header = quote! {
@@ -250,7 +246,11 @@ fn is_c_style_enum(data: &DataEnum) -> bool {
      */
     data.variants.iter().all(|var| var.fields.is_empty())
 }
-fn enum_static_type(data: &DataEnum, repr: Option<Repr>, name: &Ident) -> Result<TokenStream, syn::Error> {
+fn enum_static_type(
+    data: &DataEnum,
+    repr: Option<Repr>,
+    name: &Ident,
+) -> Result<TokenStream, syn::Error> {
     let size = quote!(std::mem::size_of::<#name>());
     let equivalent_integer = match repr {
         Some(Repr::C) => {
@@ -259,14 +259,19 @@ fn enum_static_type(data: &DataEnum, repr: Option<Repr>, name: &Ident) -> Result
                 size: static_reflect::types::IntSize::unwrap_from_bytes(#size),
                 signed: false
             })
-        },
+        }
         Some(Repr::Integer { bits, signed }) => {
             quote!(static_reflect::types::IntType {
                 size: static_reflect::types::IntSize::unwrap_from_bytes(#bits as usize / 8),
                 signed: #signed
             })
-        },
-        _ => return Err(syn::Error::new(name.span(), "Enum types must be either #[repr(C)] or #[repr(Int)]")),
+        }
+        _ => {
+            return Err(syn::Error::new(
+                name.span(),
+                "Enum types must be either #[repr(C)] or #[repr(Int)]",
+            ))
+        }
     };
     if is_c_style_enum(data) {
         // C-style enum
@@ -275,7 +280,7 @@ fn enum_static_type(data: &DataEnum, repr: Option<Repr>, name: &Ident) -> Result
     } else {
         Err(syn::Error::new(
             Span::call_site(),
-            "Complex enums are currently unsupported"
+            "Complex enums are currently unsupported",
         ))
     }
 }
@@ -289,12 +294,8 @@ trait TypeHandler<'a> {
 }
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum FieldName<'a> {
-    Tuple {
-        index: usize,
-    },
-    Named {
-        name: &'a Ident
-    }
+    Tuple { index: usize },
+    Named { name: &'a Ident },
 }
 impl FieldName<'_> {
     pub fn access(&self) -> TokenStream {
@@ -302,31 +303,33 @@ impl FieldName<'_> {
             FieldName::Tuple { index } => {
                 let idx = syn::Index::from(index);
                 quote!(#idx)
-            },
+            }
             FieldName::Named { name } => quote!(#name),
         }
     }
     pub fn associated_type_name(&self) -> Ident {
         match *self {
             FieldName::Tuple { index } => format_ident!("_Tuple_{}", index),
-            FieldName::Named { name } => name.clone()
+            FieldName::Named { name } => name.clone(),
         }
     }
 }
 struct FieldInfo<'a> {
     name: FieldName<'a>,
     static_type: Type,
-    static_def: TokenStream
+    static_def: TokenStream,
 }
 struct StructHandler<'a> {
     name: &'a Ident,
     data: &'a DataStruct,
-    current_offset: TokenStream
+    current_offset: TokenStream,
 }
 impl<'a> StructHandler<'a> {
     fn new(data: &'a DataStruct, name: &'a Ident) -> Self {
         StructHandler {
-            name, data, current_offset: quote!(0)
+            name,
+            data,
+            current_offset: quote!(0),
         }
     }
 }
@@ -338,7 +341,7 @@ impl<'a> TypeHandler<'a> for StructHandler<'a> {
     fn field_def_type(field_type: Option<TokenStream>) -> TokenStream {
         match field_type {
             Some(inner) => quote!(static_reflect::types::FieldDef<#inner>),
-            None => quote!(static_reflect::types::FieldDef)
+            None => quote!(static_reflect::types::FieldDef),
         }
     }
 
@@ -358,11 +361,13 @@ impl<'a> TypeHandler<'a> for StructHandler<'a> {
          */
         let mut current_offset = self.current_offset.clone();
         for (index, field) in self.data.fields.iter().enumerate() {
-            let DeriveFieldOptions { opaque_array, assume_repr } =
-                DeriveFieldOptions::parse_attrs(&field.attrs)?;
+            let DeriveFieldOptions {
+                opaque_array,
+                assume_repr,
+            } = DeriveFieldOptions::parse_attrs(&field.attrs)?;
             let field_name = match field.ident {
                 Some(ref name) => FieldName::Named { name },
-                None => FieldName::Tuple { index }
+                None => FieldName::Tuple { index },
             };
             let mut field_type = field.ty.clone();
             let original_type = field_type.clone();
@@ -370,17 +375,17 @@ impl<'a> TypeHandler<'a> for StructHandler<'a> {
                 if index + 1 != self.data.fields.len() {
                     return Err(syn::Error::new(
                         field.span(),
-                        "Opaque array must be last field"
+                        "Opaque array must be last field",
                     ));
                 }
                 match field_type.clone() {
                     Type::Array(array) => {
                         field_type = *array.elem;
-                    },
+                    }
                     _ => {
                         return Err(syn::Error::new(
                             field.span(),
-                            "Type must be an array to be marked 'opaque_array'"
+                            "Type must be an array to be marked 'opaque_array'",
                         ))
                     }
                 }
@@ -403,7 +408,7 @@ impl<'a> TypeHandler<'a> for StructHandler<'a> {
             });
             let name_field_value = match field_name {
                 FieldName::Tuple { .. } => quote!(None),
-                FieldName::Named { name } => quote!(Some(stringify!(#name)))
+                FieldName::Named { name } => quote!(Some(stringify!(#name))),
             };
             let static_def = quote!(::static_reflect::types::FieldDef {
                 name: #name_field_value,
@@ -412,7 +417,9 @@ impl<'a> TypeHandler<'a> for StructHandler<'a> {
                 index: #index
             });
             handler(FieldInfo {
-                name: field_name, static_type: field_type, static_def
+                name: field_name,
+                static_type: field_type,
+                static_def,
             });
             // NOTE: Must use size_of<#original_type> (See above)
             current_offset = quote!((#current_offset) + std::mem::size_of::<#original_type>());
@@ -460,7 +467,7 @@ impl<'a> TypeHandler<'a> for StructHandler<'a> {
 }
 struct UnionTypeHandler<'a> {
     data: &'a DataUnion,
-    name: &'a Ident
+    name: &'a Ident,
 }
 impl<'a> TypeHandler<'a> for UnionTypeHandler<'a> {
     fn is_tuple_style(&self) -> bool {
@@ -490,12 +497,14 @@ impl<'a> TypeHandler<'a> for UnionTypeHandler<'a> {
          * Unions are pretty simple since they're just glorified `mem::transmute`
          */
         for (index, field) in self.data.fields.named.iter().enumerate() {
-            let DeriveFieldOptions { opaque_array, assume_repr } =
-                DeriveFieldOptions::parse_attrs(&field.attrs)?;
+            let DeriveFieldOptions {
+                opaque_array,
+                assume_repr,
+            } = DeriveFieldOptions::parse_attrs(&field.attrs)?;
             if opaque_array {
                 return Err(syn::Error::new(
                     field.span(),
-                    "opaque_array is not supported on unions"
+                    "opaque_array is not supported on unions",
                 ));
             }
             let field_name = field.ident.as_ref().expect("Need named fields");
@@ -511,7 +520,7 @@ impl<'a> TypeHandler<'a> for UnionTypeHandler<'a> {
             handler(FieldInfo {
                 name: FieldName::Named { name: field_name },
                 static_type: field_type,
-                static_def
+                static_def,
             });
         }
         Ok(())

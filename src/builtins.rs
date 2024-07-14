@@ -2,11 +2,11 @@
 //!
 //! These are mostly FFI-safe alternatives to the standard library
 //! types.
+use crate::{field_offset, StaticReflect, TypeInfo};
 use std::mem::MaybeUninit;
-use crate::{StaticReflect, field_offset, TypeInfo};
 
 /// A FFi-safe slice type (`&[T]`)
-/// 
+///
 /// Unlike the rust type, this has a well-defined C representation.
 ///
 /// Internally, this is just a pointer and a length.
@@ -26,7 +26,7 @@ pub struct AsmSlice<T> {
     /// May never be null, unless
     pub ptr: *mut T,
     /// The length of the slice
-    pub len: usize
+    pub len: usize,
 }
 /// A clone implementation that blindly
 /// copies the underlying bytes.
@@ -40,12 +40,15 @@ impl<T: StaticReflect> Copy for AsmSlice<T> {}
 impl<'a, T: 'a> From<&'a [T]> for AsmSlice<T> {
     #[inline]
     fn from(slice: &'a [T]) -> Self {
-        AsmSlice { ptr: slice.as_ptr() as *mut _, len: slice.len() }
+        AsmSlice {
+            ptr: slice.as_ptr() as *mut _,
+            len: slice.len(),
+        }
     }
 }
 unsafe impl<T: StaticReflect> StaticReflect for AsmSlice<T> {
     const TYPE_INFO: TypeInfo = TypeInfo::Slice {
-        element_type: &T::TYPE_INFO
+        element_type: &T::TYPE_INFO,
     };
 }
 
@@ -65,7 +68,7 @@ unsafe impl<T: Sync> Send for AsmSlice<T> {}
 #[derive(Copy, Clone, Debug)]
 pub struct AsmStr {
     /// The underlying memory of the string
-    pub bytes: AsmSlice<u8>
+    pub bytes: AsmSlice<u8>,
 }
 impl AsmStr {
     /// A pointer to the bytes of the string
@@ -89,7 +92,9 @@ unsafe impl StaticReflect for AsmStr {
 }
 impl<'a> From<&'a str> for AsmStr {
     fn from(s: &'a str) -> AsmStr {
-        AsmStr { bytes: s.as_bytes().into() }
+        AsmStr {
+            bytes: s.as_bytes().into(),
+        }
     }
 }
 
@@ -112,7 +117,7 @@ impl<'a> From<&'a str> for AsmStr {
 #[repr(C)]
 pub struct AsmOption<T> {
     present: bool,
-    value: MaybeUninit<T>
+    value: MaybeUninit<T>,
 }
 impl AsmOption<()> {
     /// The offset of the 'present' field
@@ -137,7 +142,7 @@ impl<T> AsmOption<T> {
     pub fn none() -> AsmOption<T> {
         AsmOption {
             present: false,
-            value: MaybeUninit::uninit()
+            value: MaybeUninit::uninit(),
         }
     }
     /// Create an option with a value
@@ -145,7 +150,7 @@ impl<T> AsmOption<T> {
     pub fn some(value: T) -> AsmOption<T> {
         AsmOption {
             present: true,
-            value: MaybeUninit::new(value)
+            value: MaybeUninit::new(value),
         }
     }
     /// Assume that this option is valid
@@ -174,7 +179,7 @@ impl<T> From<Option<T>> for AsmOption<T> {
     fn from(o: Option<T>) -> AsmOption<T> {
         match o {
             None => AsmOption::none(),
-            Some(v) => AsmOption::some(v)
+            Some(v) => AsmOption::some(v),
         }
     }
 }

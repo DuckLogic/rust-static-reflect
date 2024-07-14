@@ -1,5 +1,5 @@
 //! Reflection information on function declarations
-use crate::types::{TypeInfo};
+use crate::types::TypeInfo;
 use std::marker::PhantomData;
 
 /// The declaration of a function whose information
@@ -20,7 +20,7 @@ pub struct FunctionDeclaration<R = (), Args = ()> {
     ///
     /// Unlike the [PhantomData], this is actually retained at runtime.
     pub signature: SignatureDef,
-    /// PhantomData: The return type of the function 
+    /// PhantomData: The return type of the function
     pub return_type: PhantomData<fn() -> R>,
     /// PhantomData: The argument types of the function
     pub arg_types: PhantomData<fn(Args) -> ()>,
@@ -51,9 +51,8 @@ pub struct SignatureDef {
     /// The return type of the function
     pub return_type: &'static TypeInfo,
     /// The calling convention
-    pub calling_convention: CallingConvention
+    pub calling_convention: CallingConvention,
 }
-
 
 /// The convention used to call code.
 ///
@@ -83,7 +82,7 @@ pub enum FunctionLocation {
     DynamicallyLinked {
         /// The name to be linked against,
         /// or `None` if it's the same as the function's name
-        link_name: Option<&'static str>
+        link_name: Option<&'static str>,
     },
     /// The function is referred to by an absolute (hardcoded) address
     AbsoluteAddress(*const ()),
